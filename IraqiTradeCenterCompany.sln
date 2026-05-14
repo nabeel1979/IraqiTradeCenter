@@ -1,0 +1,63 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{10000000-0000-0000-0000-000000000000}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Shared", "Shared", "{20000000-0000-0000-0000-000000000000}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Modules", "Modules", "{30000000-0000-0000-0000-000000000000}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Accounting", "Accounting", "{31000000-0000-0000-0000-000000000000}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Inventory", "Inventory", "{32000000-0000-0000-0000-000000000000}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Store", "Store", "{33000000-0000-0000-0000-000000000000}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Host", "Host", "{40000000-0000-0000-0000-000000000000}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IraqiTradeCenterCompany.SharedKernel", "src\Shared\IraqiTradeCenterCompany.SharedKernel\IraqiTradeCenterCompany.SharedKernel.csproj", "{21000000-0000-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IraqiTradeCenterCompany.Modules.Accounting.Domain", "src\Modules\Accounting\IraqiTradeCenterCompany.Modules.Accounting.Domain\IraqiTradeCenterCompany.Modules.Accounting.Domain.csproj", "{31000000-0000-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IraqiTradeCenterCompany.Modules.Accounting.Application", "src\Modules\Accounting\IraqiTradeCenterCompany.Modules.Accounting.Application\IraqiTradeCenterCompany.Modules.Accounting.Application.csproj", "{31000000-0000-0000-0000-000000000002}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IraqiTradeCenterCompany.Modules.Accounting.Infrastructure", "src\Modules\Accounting\IraqiTradeCenterCompany.Modules.Accounting.Infrastructure\IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.csproj", "{31000000-0000-0000-0000-000000000003}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IraqiTradeCenterCompany.Modules.Inventory.Domain", "src\Modules\Inventory\IraqiTradeCenterCompany.Modules.Inventory.Domain\IraqiTradeCenterCompany.Modules.Inventory.Domain.csproj", "{32000000-0000-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IraqiTradeCenterCompany.Modules.Inventory.Application", "src\Modules\Inventory\IraqiTradeCenterCompany.Modules.Inventory.Application\IraqiTradeCenterCompany.Modules.Inventory.Application.csproj", "{32000000-0000-0000-0000-000000000002}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IraqiTradeCenterCompany.Modules.Inventory.Infrastructure", "src\Modules\Inventory\IraqiTradeCenterCompany.Modules.Inventory.Infrastructure\IraqiTradeCenterCompany.Modules.Inventory.Infrastructure.csproj", "{32000000-0000-0000-0000-000000000003}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IraqiTradeCenterCompany.Modules.Store.Domain", "src\Modules\Store\IraqiTradeCenterCompany.Modules.Store.Domain\IraqiTradeCenterCompany.Modules.Store.Domain.csproj", "{33000000-0000-0000-0000-000000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IraqiTradeCenterCompany.Modules.Store.Application", "src\Modules\Store\IraqiTradeCenterCompany.Modules.Store.Application\IraqiTradeCenterCompany.Modules.Store.Application.csproj", "{33000000-0000-0000-0000-000000000002}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IraqiTradeCenterCompany.Modules.Store.Infrastructure", "src\Modules\Store\IraqiTradeCenterCompany.Modules.Store.Infrastructure\IraqiTradeCenterCompany.Modules.Store.Infrastructure.csproj", "{33000000-0000-0000-0000-000000000003}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IraqiTradeCenterCompany.API", "src\Host\IraqiTradeCenterCompany.API\IraqiTradeCenterCompany.API.csproj", "{40000000-0000-0000-0000-000000000001}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{20000000-0000-0000-0000-000000000000} = {10000000-0000-0000-0000-000000000000}
+		{30000000-0000-0000-0000-000000000000} = {10000000-0000-0000-0000-000000000000}
+		{40000000-0000-0000-0000-000000000000} = {10000000-0000-0000-0000-000000000000}
+		{31000000-0000-0000-0000-000000000000} = {30000000-0000-0000-0000-000000000000}
+		{32000000-0000-0000-0000-000000000000} = {30000000-0000-0000-0000-000000000000}
+		{33000000-0000-0000-0000-000000000000} = {30000000-0000-0000-0000-000000000000}
+		{21000000-0000-0000-0000-000000000001} = {20000000-0000-0000-0000-000000000000}
+		{31000000-0000-0000-0000-000000000001} = {31000000-0000-0000-0000-000000000000}
+		{31000000-0000-0000-0000-000000000002} = {31000000-0000-0000-0000-000000000000}
+		{31000000-0000-0000-0000-000000000003} = {31000000-0000-0000-0000-000000000000}
+		{32000000-0000-0000-0000-000000000001} = {32000000-0000-0000-0000-000000000000}
+		{32000000-0000-0000-0000-000000000002} = {32000000-0000-0000-0000-000000000000}
+		{32000000-0000-0000-0000-000000000003} = {32000000-0000-0000-0000-000000000000}
+		{33000000-0000-0000-0000-000000000001} = {33000000-0000-0000-0000-000000000000}
+		{33000000-0000-0000-0000-000000000002} = {33000000-0000-0000-0000-000000000000}
+		{33000000-0000-0000-0000-000000000003} = {33000000-0000-0000-0000-000000000000}
+		{40000000-0000-0000-0000-000000000001} = {40000000-0000-0000-0000-000000000000}
+	EndGlobalSection
+EndGlobal

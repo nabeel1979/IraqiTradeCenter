@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>IraqiTradeCenterCompany.Modules.Store.Domain</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\IraqiTradeCenterCompany.SharedKernel\IraqiTradeCenterCompany.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>
