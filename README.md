@@ -1,256 +1,176 @@
-# مركز التجارة العراقي - الشركات API
+# 🎨 لوحة الشركة الجملة - مركز التجارة العراقي
 
-نظام إدارة الشركات في منصة "مركز التجارة العراقي" — مبني بمعمارية **Modular Monolith** على **ASP.NET 8** + **EF Core 8**.
+داشبورد احترافي لإدارة الشركات الجملة في منصة مركز التجارة العراقي.  
+مبني بـ **React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui**.
 
-## 🏛️ المعمارية
+## ✨ الميزات
 
-كل شركة في المنصة عندها قاعدة بيانات منفصلة + نسخة من هذا الـ API. النظام مقسم إلى **3 مودولز معزولة** داخل solution واحد:
+- 🌙 **Dark Mode الافتراضي** بطابع ميسوبوتامي راقي (لون ذهبي عتيق)
+- 🌐 **عربي-أولاً (RTL)** مع خط IBM Plex Sans Arabic احترافي
+- 📱 **متجاوب** على كل الأجهزة
+- 🔐 **JWT Authentication** متكامل مع الـ Backend
+- ⚡ **TanStack Query** للـ data fetching الذكي
+- 🎯 **TypeScript** بالكامل، Types مطابقة للـ DTOs
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│           IraqiTradeCenterCompany.API (Host)               │
-│              يجمع المودولز الثلاث في deployment واحد         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        ▼                     ▼                     ▼
-   ┌─────────┐          ┌──────────┐         ┌─────────┐
-   │ المحاسبة  │          │ المستودعات │         │  المتجر  │
-   │ acc.*   │          │  inv.*   │         │ store.* │
-   └─────────┘          └──────────┘         └─────────┘
-        ▲                     ▲                     │
-        │                     │                     │
-        └─────IAccountingService              IInventoryService
-                                                    │
-                                       ┌────────────┴──────────┐
-                                       │  Store يستدعي عبر      │
-                                       │  Contracts فقط         │
-                                       └─────────────────────────┘
-```
-
-### المبادئ الأساسية
-
-1. **عزل صارم**: Store لا يعرف Accounting.Domain أو Inventory.Domain — يستخدم Contracts فقط (واجهات + DTOs).
-2. **Schemas منفصلة** بنفس قاعدة البيانات الفيزيائية:
-   - `acc.*` — جداول المحاسبة
-   - `inv.*` — جداول المستودعات
-   - `store.*` — جداول المتجر
-3. **3 DbContexts منفصلة** + **3 جداول Migrations منفصلة** (`__EFMigrations_Accounting/Inventory/Store`).
-4. **Transactions عبر المودولز** عبر `TransactionScope` — كلهم على نفس الـ connection فيدخلون بنفس الـ DB transaction.
-
-## 📁 هيكل المشاريع (11 مشروع)
-
-```
-src/
-├── Shared/
-│   └── IraqiTradeCenterCompany.SharedKernel/
-│       ├── Common/BaseEntity, BaseEntityGuid
-│       ├── Exceptions/DomainException, NotFoundException
-│       ├── Models/Result<T>, PagedResult<T>
-│       ├── Behaviors/ValidationBehavior, LoggingBehavior
-│       └── Interfaces/ICurrentUserService, IDateTimeService
-│
-├── Modules/
-│   ├── Accounting/                          [المحاسبة]
-│   │   ├── .Domain         (Account, JournalEntry, FiscalYear, AccountingPeriod)
-│   │   ├── .Application    (Contracts/IAccountingService - PUBLIC) + Features
-│   │   └── .Infrastructure (AccountingDbContext + Services + Seed)
-│   │
-│   ├── Inventory/                           [المستودعات]
-│   │   ├── .Domain         (Item, StockMovement, Warehouse, UnitOfMeasure)
-│   │   ├── .Application    (Contracts/IInventoryService - PUBLIC) + Features
-│   │   └── .Infrastructure (InventoryDbContext + Services + Seed)
-│   │
-│   └── Store/                               [المتجر]
-│       ├── .Domain         (Customer, SalesRep, SalesInvoice, IncomingOrder)
-│       ├── .Application    + يستخدم IAccountingService + IInventoryService
-│       └── .Infrastructure (StoreDbContext)
-│
-└── Host/
-    └── IraqiTradeCenterCompany.API
-```
-
-## 🔗 التواصل بين المودولز
-
-### Accounting ← Store ، Inventory
-
-```csharp
-public interface IAccountingService
-{
-    Task<int> CreateAutomaticJournalEntryAsync(CreateAutomaticEntryRequest request, CancellationToken ct);
-    Task<int> GetAccountIdByCodeAsync(string code, CancellationToken ct);
-    Task EnsurePeriodOpenAsync(DateTime date, CancellationToken ct);
-}
-```
-
-البيانات المرسلة DTOs فقط — `AccountCode` (مثل `1.2.01`) وليس `AccountId`. هكذا Store لا يعرف شيء عن الـ entities الداخلية للمحاسبة.
-
-### Inventory ← Store
-
-```csharp
-public interface IInventoryService
-{
-    Task<bool> CheckStockAvailabilityAsync(int itemId, int unitId, decimal quantity, CancellationToken ct);
-    Task<int> RecordSalesOutAsync(StockOutRequest request, CancellationToken ct);
-    Task<int> RecordSalesReturnAsync(StockReturnRequest request, CancellationToken ct);
-    Task<ItemSnapshot?> GetItemSnapshotAsync(int itemId, CancellationToken ct);
-    Task<int?> GetDefaultWarehouseIdAsync(CancellationToken ct);
-}
-```
-
-## 💎 مثال على Cross-Module: إنشاء فاتورة مبيعات
-
-`CreateSalesInvoiceHandler` (في Store) ينفذ كل ذلك في **TransactionScope واحد**:
-
-```
-1) تحقق من العميل (Store DB)
-2) EnsurePeriodOpenAsync — فترة محاسبية مفتوحة (Accounting)
-3) GetItemSnapshotAsync لكل مادة (Inventory)
-4) CheckStockAvailabilityAsync (Inventory)
-5) بناء الفاتورة + Issue (Store)
-6) فحص CreditLimit (Store)
-7) RecordSalesOutAsync لكل سطر (Inventory)
-8) AdjustBalance للعميل (Store)
-9) CreateAutomaticJournalEntryAsync (Accounting):
-     مدين  ذمم العملاء (1.2.01)    = إجمالي الفاتورة
-     دائن  إيرادات المبيعات (4.1.01) = صافي بعد الخصم
-     دائن  ضريبة مستحقة (2.1.02)   = الضريبة
-10) LinkJournalEntry — ربط الفاتورة بالقيد (Store)
-11) إذا من طلبية، Confirm الطلبية (Store)
-```
-
-## 📊 شجرة الحسابات العراقية (تُزرع تلقائياً)
-
-| الكود   | الحساب                       | النوع     | الطبيعة |
-|--------|------------------------------|-----------|---------|
-| 1.1.01 | الصندوق                       | أصول     | مدين    |
-| 1.1.02 | البنك                         | أصول     | مدين    |
-| 1.2.01 | ذمم العملاء                   | أصول     | مدين    |
-| 1.3.01 | مخزون البضاعة                  | أصول     | مدين    |
-| 2.1.01 | ذمم الموردين                  | خصوم     | دائن    |
-| 2.1.02 | ضريبة مستحقة الدفع              | خصوم     | دائن    |
-| 2.1.03 | عمولات مستحقة الدفع             | خصوم     | دائن    |
-| 2.1.04 | رواتب مستحقة الدفع              | خصوم     | دائن    |
-| 3.1.01 | رأس المال                     | حقوق ملكية | دائن   |
-| 4.1.01 | إيرادات المبيعات                | إيرادات   | دائن    |
-| 4.1.02 | خصومات ممنوحة                  | إيرادات   | مدين    |
-| 4.1.03 | مرتجع المبيعات                 | إيرادات   | مدين    |
-| 5.1.01 | تكلفة البضاعة المباعة            | مصروفات   | مدين    |
-| 5.2.01 | مصروف عمولات المندوبين           | مصروفات   | مدين    |
-| 5.2.02 | نقل وشحن                      | مصروفات   | مدين    |
-| 5.3.01 | الرواتب                       | مصروفات   | مدين    |
-| 5.3.02 | الإيجار                        | مصروفات   | مدين    |
-| 5.4.01 | كهرباء وماء                    | مصروفات   | مدين    |
-| 5.4.02 | اتصالات وإنترنت                 | مصروفات   | مدين    |
-
-## ⚙️ الميزات
-
-### المحاسبة
-- ✅ القيد المزدوج Double-Entry (التحقق من توازن المدين = الدائن قبل الترحيل)
-- ✅ سنوات مالية + فترات شهرية (12 فترة لكل سنة)
-- ✅ منع القيود في فترة مغلقة (`ClosedPeriodException`)
-- ✅ القيود التلقائية المولّدة من Store و Inventory
-- ✅ ميزان المراجعة Trial Balance
-- ✅ شجرة الحسابات الهرمية (3 مستويات)
-- ✅ عكس القيود (Reversal)
-
-### المستودعات
-- ✅ **ثلاث وحدات قياس لكل مادة** (أساس، متوسط، كبير) مع معاملات تحويل
-- ✅ المخزون دائماً بوحدة الأساس داخلياً (`StockBaseQuantity`)
-- ✅ سعر مستقل لكل وحدة
-- ✅ تتبع كامل لحركات المخزون مع QtyBefore/QtyAfter
-- ✅ منع البيع عند نفاد المخزون (`InsufficientStockException`)
-- ✅ مستوى مخزون أدنى مع تنبيه (`IsLowStock`)
-- ✅ Optimistic Concurrency على Item (RowVersion)
-
-### المتجر
-- ✅ ربط مع المنصة الأم (PlatformUserId, PlatformTraderId, PlatformOrderId)
-- ✅ حالات الفاتورة State Machine (Draft → Issued → Paid/PartiallyPaid/Cancelled)
-- ✅ نوعين من عمولات المندوبين: ثابتة Fixed + متدرجة Tiered
-- ✅ كشف حساب عميل مع رصيد متراكم
-- ✅ حد ائتماني للعميل + فحص قبل الفاتورة
-- ✅ تأكيد طلبيات قادمة من المنصة الأم → فاتورة + قيد + خصم مخزون
-
-## 🛠️ التشغيل
+## 🚀 التشغيل السريع
 
 ### المتطلبات
-- .NET 8 SDK
-- SQL Server (Express أو أعلى)
-- نسخة من Parent Backend (لـ JWT المشترك)
+- Node.js 18+ ([تحميل](https://nodejs.org/))
+- npm أو yarn أو pnpm
 
 ### الخطوات
 
 ```bash
-cd src/Host/IraqiTradeCenterCompany.API
-dotnet restore
-dotnet build
-dotnet run
+# 1) نصب الحزم
+npm install
+
+# 2) شغّل في وضع التطوير
+npm run dev
+
+# 3) افتح المتصفح على
+# http://localhost:3000
 ```
 
-عند أول تشغيل سيتم:
-1. إنشاء قاعدة البيانات `IraqiTradeCenter_Company_001`
-2. إنشاء الـ schemas الثلاثة (`acc`, `inv`, `store`)
-3. زرع شجرة الحسابات + السنة المالية + الفترات
-4. زرع وحدات القياس + المخزن الافتراضي
+### اتصال الـ Backend
 
-افتح: **https://localhost:6001/swagger**
+افتراضياً، الـ Vite proxy يحوّل طلبات `/api/*` إلى `http://localhost:6000` (الـ Companies API).
 
-### إنشاء Migrations (اختياري)
+لو الـ Backend على عنوان مختلف، عدّل `vite.config.ts`:
 
-كل مودول له migrations منفصلة:
+```typescript
+server: {
+  proxy: {
+    '/api': {
+      target: 'http://YOUR_API_URL:6000',  // ← غيّر هنا
+      changeOrigin: true,
+    },
+  },
+},
+```
+
+## 📁 هيكل المشروع
+
+```
+src/
+├── components/
+│   ├── ui/              # shadcn/ui components
+│   ├── layout/          # Sidebar, TopBar, Layout
+│   └── shared/          # StatCard, EmptyState, ...
+├── pages/
+│   ├── auth/            # Login
+│   ├── dashboard/       # الـ KPIs والرسومات
+│   ├── invoices/        # الفواتير
+│   ├── inventory/       # المخزون
+│   ├── customers/       # العملاء
+│   ├── sales-reps/      # المندوبون
+│   ├── orders/          # الطلبيات
+│   └── accounting/      # المحاسبة
+├── lib/
+│   ├── api/             # API clients (axios)
+│   ├── auth/            # Zustand store + Guard
+│   └── utils.ts         # formatIQD, formatDate, cn
+├── types/
+│   └── api.ts           # TypeScript types من الـ DTOs
+└── globals.css          # نظام التصميم
+```
+
+## 🎨 نظام التصميم
+
+### الألوان
+- **Background**: `#0F0F11` - أسود دافئ
+- **Primary**: `#D4A876` - ذهب عتيق
+- **Card**: `#16161A` - رمادي داكن دافئ
+- **Border**: `#26262C` - حدود خفيفة
+
+### الخطوط
+- **Display** (العناوين): Cormorant Garamond
+- **Body**: IBM Plex Sans Arabic
+- **Numbers**: IBM Plex Mono (tabular-nums)
+
+## 🔌 الصفحات المبنية حالياً
+
+| الصفحة | الحالة |
+|---------|--------|
+| 🔐 تسجيل الدخول | ✅ كامل + متصل بـ API |
+| 📊 لوحة القيادة | ✅ كامل + رسوم بيانية |
+| 📦 قائمة المواد | ✅ كامل + متصل بـ API |
+| 🧾 قائمة الفواتير | ✅ هيكل جاهز |
+| ➕ إنشاء فاتورة | ⏳ في الجزء التالي |
+| 👥 العملاء | ⏳ في الجزء التالي |
+| 🧑‍💼 المندوبون | ⏳ في الجزء التالي |
+| 📋 الطلبيات | ⏳ في الجزء التالي |
+| 💰 المحاسبة (3 صفحات) | ⏳ في الجزء التالي |
+
+## 📦 بناء للإنتاج
 
 ```bash
-# المحاسبة
-dotnet ef migrations add Initial \
-  --project src/Modules/Accounting/IraqiTradeCenterCompany.Modules.Accounting.Infrastructure \
-  --startup-project src/Host/IraqiTradeCenterCompany.API \
-  --context AccountingDbContext
-
-# المستودعات
-dotnet ef migrations add Initial \
-  --project src/Modules/Inventory/IraqiTradeCenterCompany.Modules.Inventory.Infrastructure \
-  --startup-project src/Host/IraqiTradeCenterCompany.API \
-  --context InventoryDbContext
-
-# المتجر
-dotnet ef migrations add Initial \
-  --project src/Modules/Store/IraqiTradeCenterCompany.Modules.Store.Infrastructure \
-  --startup-project src/Host/IraqiTradeCenterCompany.API \
-  --context StoreDbContext
+npm run build
 ```
 
-## 🇮🇶 قواعد عراقية مدمجة
+المخرجات في مجلد `dist/`. ارفعهم لأي static host (Nginx, Vercel, Netlify, IIS).
 
-- العملة: **IQD** بصيغة `decimal(18,3)` (الدينار يقبل ثلاث منازل عشرية)
-- الهاتف: regex `^07[0-9]{9}$`
-- التوقيت: Baghdad (`Arabic Standard Time`)
-- كل الرسائل والـ Domain Exceptions بالعربي
-- التقريب: 3 منازل عشرية في كل العمليات
+### نشر على IIS
+1. ابني المشروع: `npm run build`
+2. انسخ محتوى `dist/` إلى مجلد IIS Site
+3. أضف ملف `web.config` للتعامل مع React Router:
 
-## 📡 الـ Endpoints
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <system.webServer>
+    <rewrite>
+      <rules>
+        <rule name="React Router">
+          <match url=".*" />
+          <conditions logicalGrouping="MatchAll">
+            <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
+            <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
+          </conditions>
+          <action type="Rewrite" url="/" />
+        </rule>
+      </rules>
+    </rewrite>
+  </system.webServer>
+</configuration>
+```
 
-| Endpoint | الوصف |
-|---------|------|
-| `GET    /api/accounts/tree` | شجرة الحسابات |
-| `POST   /api/accounts/journal-entries` | قيد يدوي |
-| `GET    /api/accounts/trial-balance?from=&to=` | ميزان المراجعة |
-| `POST   /api/items` | إضافة مادة |
-| `GET    /api/items` | قائمة المواد |
-| `POST   /api/items/stock-movements` | حركة مخزون |
-| `POST   /api/salesreps` | إضافة مندوب |
-| `POST   /api/salesreps/{id}/calculate-commission` | احتساب عمولة |
-| `GET    /api/salesreps/{id}/performance` | أداء المندوب |
-| `POST   /api/salesinvoices` | إنشاء فاتورة مبيعات |
-| `POST   /api/salesinvoices/{id}/payments` | تسجيل دفعة |
-| `GET    /api/customers/{id}/statement` | كشف حساب العميل |
-| `GET    /api/incomingorders/pending` | الطلبيات المعلقة |
-| `POST   /api/incomingorders/{id}/confirm` | تأكيد طلبية → فاتورة |
+## 🔗 API Endpoints المستخدمة
 
-## 🔮 المستقبل
+كل الـ endpoints تطلب JWT في `Authorization: Bearer <token>`:
 
-- 🔜 Frontend Dashboard للشركات (React + Tailwind)
-- 🔜 Mobile App للتجار (React Native)
-- 🔜 خدمة المزامنة بين Parent DB و Company DBs
-- 🔜 تكامل بوابات الدفع العراقية (ZainCash, AsiaHawala, FastPay)
-- 🔜 SignalR للإشعارات الفورية
-- 🔜 قائمة الدخل + الميزانية العمومية (تقارير ختامية)
+- `POST /api/auth/login` → تسجيل دخول
+- `GET /api/items` → قائمة المواد
+- `POST /api/items` → إضافة مادة
+- `POST /api/salesinvoices` → إنشاء فاتورة
+- `POST /api/salesinvoices/{id}/payments` → تسجيل دفعة
+- `GET /api/accounts/tree` → شجرة الحسابات
+- `GET /api/accounts/trial-balance` → ميزان المراجعة
+- `GET /api/incomingorders/pending` → الطلبيات المعلقة
+
+## 🛠️ Stack الكامل
+
+| المكتبة | الاستخدام |
+|---------|--------|
+| **React 18** | UI framework |
+| **TypeScript** | Type safety |
+| **Vite** | Build tool |
+| **Tailwind CSS** | Styling |
+| **shadcn/ui** | Component primitives |
+| **TanStack Query** | Server state |
+| **Zustand** | Client state (auth) |
+| **React Router** | Routing |
+| **React Hook Form + Zod** | النماذج والتحقق |
+| **Recharts** | الرسوم البيانية |
+| **Axios** | HTTP client |
+| **Sonner** | Notifications |
+| **Lucide React** | Icons |
+
+## 🎯 الخطوات التالية
+
+الـ Foundation كامل. الباقي:
+1. صفحة إنشاء فاتورة (الأهم - معقدة)
+2. قائمة العملاء + كشف الحساب
+3. شجرة الحسابات التفاعلية
+4. صفحة المندوبين مع احتساب العمولات
+5. صفحة الطلبيات الواردة مع التأكيد
+6. ميزان المراجعة بشكل تفاعلي
