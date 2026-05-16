@@ -1,0 +1,2 @@
+IraqiTradeCenter Company API — deployment OK.
+If this file sits next to IraqiTradeCenterCompany.API.dll and web.config, IIS Physical path is correct.

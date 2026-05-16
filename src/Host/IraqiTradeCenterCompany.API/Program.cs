@@ -22,6 +22,10 @@ using Microsoft.OpenApi.Models;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+// إعدادات محلية/سيرفر (مفاتيح وسلاسل اتصال) — الملف مُستثنى من Git
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+// متغيرات البيئة بعد الملف المحلي حتى تتجاوز سلسلة الاتصال عند التشغيل على أجهزة مختلفة
+builder.Configuration.AddEnvironmentVariables();
 
 // Serilog
 Log.Logger = new LoggerConfiguration()
@@ -103,25 +107,38 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // ============ Migrations + Seed ============
-using (var scope = app.Services.CreateScope())
+try
 {
+    using var scope = app.Services.CreateScope();
     var sp = scope.ServiceProvider;
     var accountingDb = sp.GetRequiredService<AccountingDbContext>();
-    var inventoryDb = sp.GetRequiredService<InventoryDbContext>();
-    var storeDb = sp.GetRequiredService<StoreDbContext>();
+    var inventoryDb  = sp.GetRequiredService<InventoryDbContext>();
+    var storeDb      = sp.GetRequiredService<StoreDbContext>();
 
-    await accountingDb.Database.EnsureCreatedAsync();
-    await inventoryDb.Database.EnsureCreatedAsync();
-    await storeDb.Database.EnsureCreatedAsync();
+    await accountingDb.Database.MigrateAsync();
+    await inventoryDb.Database.MigrateAsync();
+    await storeDb.Database.MigrateAsync();
 
     await ChartOfAccountsSeeder.SeedAsync(accountingDb);
     await FiscalYearSeeder.SeedAsync(accountingDb);
     await UnitsOfMeasureSeeder.SeedAsync(inventoryDb);
     await DefaultWarehouseSeeder.SeedAsync(inventoryDb);
+
+    Log.Information("Database migrations and seed completed successfully.");
+}
+catch (Exception ex)
+{
+    // Log the error but allow the app to start — /health and /swagger still work
+    // The API endpoints will fail until the DB is reachable
+    Log.Error(ex, "Database migration/seed failed at startup. Connection: {Conn}",
+        builder.Configuration.GetConnectionString("DefaultConnection")?
+            .Split(';').FirstOrDefault() ?? "unknown");
 }
 
 // Middleware pipeline
-if (app.Environment.IsDevelopment())
+var exposeSwagger = app.Environment.IsDevelopment()
+    || app.Configuration.GetValue("App:ExposeSwagger", false);
+if (exposeSwagger)
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -133,5 +150,13 @@ app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+// الجذر كان بدون مسار فيظهر للمستخدم "لا شيء" أو 404 على IIS — هذا للتأكد أن التطبيق يعمل
+app.MapGet("/", () => Results.Text(
+    "IraqiTradeCenter Company API — running.\n" +
+    "Swagger: /swagger (requires App:ExposeSwagger=true in Production, or Development).\n" +
+    "REST: /api/...\n",
+    "text/plain; charset=utf-8"));
+app.MapGet("/health", () => Results.Text("ok", "text/plain"));
 
 await app.RunAsync();

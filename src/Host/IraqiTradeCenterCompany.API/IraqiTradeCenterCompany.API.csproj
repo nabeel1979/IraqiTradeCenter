@@ -8,6 +8,10 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
     <PackageReference Include="Serilog.AspNetCore" Version="8.0.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />
@@ -18,5 +22,11 @@
     <ProjectReference Include="..\..\Modules\Accounting\IraqiTradeCenterCompany.Modules.Accounting.Infrastructure\IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Inventory\IraqiTradeCenterCompany.Modules.Inventory.Infrastructure\IraqiTradeCenterCompany.Modules.Inventory.Infrastructure.csproj" />
     <ProjectReference Include="..\..\Modules\Store\IraqiTradeCenterCompany.Modules.Store.Infrastructure\IraqiTradeCenterCompany.Modules.Store.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Update="appsettings.Local.json">
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </Content>
+    <Content Include="Deploy-Verify.txt" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
