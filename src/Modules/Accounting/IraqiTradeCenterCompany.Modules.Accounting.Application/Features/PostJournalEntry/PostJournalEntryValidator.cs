@@ -6,7 +6,7 @@ public class PostJournalEntryValidator : AbstractValidator<PostJournalEntryComma
 {
     public PostJournalEntryValidator()
     {
-        RuleFor(x => x.Description).NotEmpty();
+        // البيان اختياري - عند تركه فارغاً يُحفظ "—"
         RuleFor(x => x.Lines).NotEmpty().Must(l => l.Count >= 2)
             .WithMessage("القيد لازم سطرين على الأقل");
         RuleForEach(x => x.Lines).ChildRules(line =>

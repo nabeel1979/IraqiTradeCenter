@@ -1,5 +1,20 @@
 namespace IraqiTradeCenterCompany.Modules.Store.Application.Dtos;
 
+public class CustomerDto
+{
+    public int Id { get; set; }
+    public string Code { get; set; } = default!;
+    public string BusinessName { get; set; } = default!;
+    public string OwnerName { get; set; } = default!;
+    public string Phone { get; set; } = default!;
+    public string? Email { get; set; }
+    public string? Address { get; set; }
+    public decimal CreditLimit { get; set; }
+    public decimal CurrentBalance { get; set; }
+    public int? AssignedSalesRepId { get; set; }
+    public bool IsActive { get; set; }
+}
+
 public class SalesInvoiceDto
 {
     public int Id { get; set; }

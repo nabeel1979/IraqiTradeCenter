@@ -149,6 +149,244 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                     b.ToTable("AccountingPeriods", "acc");
                 });
 
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.CashBox", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AccountId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(100);
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NameEn")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("DisplayOrder");
+
+                    b.ToTable("CashBoxes", "acc");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.CashBoxCurrency", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CashBoxId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("CreditLimit")
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<decimal?>("DebitLimit")
+                        .HasColumnType("decimal(18,3)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CashBoxId", "Currency")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.ToTable("CashBoxCurrencies", "acc");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.CurrencyRateBulletin", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BaseCurrency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("EffectiveAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PublishedBy")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EffectiveAt");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("CurrencyRateBulletins", "acc");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.CurrencyRateLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("CurrencyRateBulletinId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Operation")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Rate")
+                        .HasColumnType("decimal(18,6)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrencyRateBulletinId", "Currency")
+                        .IsUnique();
+
+                    b.ToTable("CurrencyRateLines", "acc");
+                });
+
             modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.FiscalYear", b =>
                 {
                     b.Property<int>("Id")
@@ -217,6 +455,13 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasDefaultValue("IQD");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
@@ -232,6 +477,11 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("EntryType")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(1);
 
                     b.Property<int>("FiscalYearId")
                         .HasColumnType("int");
@@ -278,14 +528,19 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                     b.Property<string>("UpdatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("VoucherTypeId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("EntryDate");
 
-                    b.HasIndex("EntryNumber")
-                        .IsUnique();
-
                     b.HasIndex("Status");
+
+                    b.HasIndex("VoucherTypeId");
+
+                    b.HasIndex("FiscalYearId", "EntryNumber")
+                        .IsUnique();
 
                     b.HasIndex("ReferenceType", "ReferenceId");
 
@@ -343,6 +598,96 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                     b.ToTable("JournalEntryLines", "acc");
                 });
 
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.JournalVoucherType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("DefaultCreditAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("DefaultDebitAccountId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("DisplayOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(100);
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("IsSystem")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("NameEn")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("Nature")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0);
+
+                    b.Property<bool>("ShowInSidebar")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("DefaultCreditAccountId");
+
+                    b.HasIndex("DefaultDebitAccountId");
+
+                    b.HasIndex("DisplayOrder");
+
+                    b.ToTable("JournalVoucherTypes", "acc");
+                });
+
             modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.Account", b =>
                 {
                     b.HasOne("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.Account", "Parent")
@@ -362,6 +707,47 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.CashBox", b =>
+                {
+                    b.HasOne("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.Account", "Account")
+                        .WithMany()
+                        .HasForeignKey("AccountId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.CashBoxCurrency", b =>
+                {
+                    b.HasOne("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.CashBox", "CashBox")
+                        .WithMany("Currencies")
+                        .HasForeignKey("CashBoxId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CashBox");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.CurrencyRateLine", b =>
+                {
+                    b.HasOne("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.CurrencyRateBulletin", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("CurrencyRateBulletinId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.JournalEntry", b =>
+                {
+                    b.HasOne("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.JournalVoucherType", "VoucherType")
+                        .WithMany()
+                        .HasForeignKey("VoucherTypeId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("VoucherType");
+                });
+
             modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.JournalEntryLine", b =>
                 {
                     b.HasOne("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.JournalEntry", null)
@@ -371,9 +757,36 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.JournalVoucherType", b =>
+                {
+                    b.HasOne("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.Account", "DefaultCreditAccount")
+                        .WithMany()
+                        .HasForeignKey("DefaultCreditAccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.Account", "DefaultDebitAccount")
+                        .WithMany()
+                        .HasForeignKey("DefaultDebitAccountId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("DefaultCreditAccount");
+
+                    b.Navigation("DefaultDebitAccount");
+                });
+
             modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.Account", b =>
                 {
                     b.Navigation("Children");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.CashBox", b =>
+                {
+                    b.Navigation("Currencies");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.CurrencyRateBulletin", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.FiscalYear", b =>

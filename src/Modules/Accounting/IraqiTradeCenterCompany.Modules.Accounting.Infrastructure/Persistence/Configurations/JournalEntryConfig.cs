@@ -14,16 +14,23 @@ public class JournalEntryConfig : IEntityTypeConfiguration<JournalEntry>
         b.Property(x => x.Description).HasMaxLength(500).IsRequired();
         b.Property(x => x.Status).HasConversion<int>();
         b.Property(x => x.Source).HasConversion<int>();
+        b.Property(x => x.EntryType).HasConversion<int>().HasDefaultValue(Domain.Enums.JournalEntryType.Normal);
+        b.Property(x => x.Currency).HasMaxLength(10).HasDefaultValue("IQD").IsRequired();
         b.Property(x => x.TotalDebit).HasColumnType("decimal(18,3)");
         b.Property(x => x.TotalCredit).HasColumnType("decimal(18,3)");
         b.Property(x => x.ReferenceType).HasMaxLength(50);
         b.Property(x => x.ReferenceNumber).HasMaxLength(100);
         b.Property(x => x.PostedBy).HasMaxLength(100);
-        b.HasIndex(x => x.EntryNumber).IsUnique();
+        b.HasIndex(x => new { x.FiscalYearId, x.EntryNumber }).IsUnique();
         b.HasIndex(x => x.EntryDate);
         b.HasIndex(x => x.Status);
         b.HasIndex(x => new { x.ReferenceType, x.ReferenceId });
+        b.HasIndex(x => x.VoucherTypeId);
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(l => l.JournalEntryId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.VoucherType)
+            .WithMany()
+            .HasForeignKey(x => x.VoucherTypeId)
+            .OnDelete(DeleteBehavior.NoAction);
         b.HasQueryFilter(x => !x.IsDeleted);
     }
 }

@@ -13,6 +13,11 @@ public class JournalEntry : BaseEntity
     public int AccountingPeriodId { get; private set; }
     public JournalEntryStatus Status { get; private set; }
     public JournalEntrySource Source { get; private set; }
+    public JournalEntryType EntryType { get; private set; } = JournalEntryType.Normal;
+    /// <summary>نوع السند المستخدم في إنشاء هذا القيد (سند قبض، سند دفع، …) — اختياري</summary>
+    public int? VoucherTypeId { get; private set; }
+    public virtual JournalVoucherType? VoucherType { get; private set; }
+    public string Currency { get; private set; } = "IQD";
     public string Description { get; private set; } = default!;
     public decimal TotalDebit { get; private set; }
     public decimal TotalCredit { get; private set; }
@@ -27,15 +32,22 @@ public class JournalEntry : BaseEntity
     private JournalEntry() { }
 
     public static JournalEntry Create(DateTime date, int fyId, int periodId, JournalEntrySource source,
-                                       string description, string? refType = null, int? refId = null, string? refNumber = null)
+                                       string description, string? refType = null, int? refId = null, string? refNumber = null,
+                                       JournalEntryType type = JournalEntryType.Normal, string currency = "IQD",
+                                       string? entryNumber = null, int? voucherTypeId = null)
     {
-        if (string.IsNullOrWhiteSpace(description)) throw new DomainException("بيان القيد مطلوب");
+        if (string.IsNullOrWhiteSpace(entryNumber))
+            throw new DomainException("رقم القيد مطلوب");
+
         return new JournalEntry
         {
-            EntryNumber = GenerateNumber(),
+            EntryNumber = entryNumber.Trim(),
             EntryDate = date, FiscalYearId = fyId, AccountingPeriodId = periodId,
             Status = JournalEntryStatus.Draft, Source = source,
-            Description = description,
+            EntryType = type,
+            VoucherTypeId = voucherTypeId,
+            Currency = string.IsNullOrWhiteSpace(currency) ? "IQD" : currency.Trim().ToUpperInvariant(),
+            Description = string.IsNullOrWhiteSpace(description) ? "—" : description.Trim(),
             ReferenceType = refType, ReferenceId = refId, ReferenceNumber = refNumber
         };
     }
@@ -54,6 +66,36 @@ public class JournalEntry : BaseEntity
         Recalc();
     }
 
+    public void UpdateBasic(DateTime entryDate, string description, JournalEntryType type, string currency, int? voucherTypeId = null)
+    {
+        if (Status == JournalEntryStatus.Reversed) throw new DomainException("لا يمكن تعديل قيد معكوس");
+        EntryDate = entryDate;
+        Description = string.IsNullOrWhiteSpace(description) ? "—" : description.Trim();
+        EntryType = type;
+        VoucherTypeId = voucherTypeId;
+        Currency = string.IsNullOrWhiteSpace(currency) ? "IQD" : currency.Trim().ToUpperInvariant();
+    }
+
+    public void ReplaceLines(IReadOnlyList<(int AccountId, bool IsDebit, decimal Amount, string? Description)> newLines)
+    {
+        if (Status == JournalEntryStatus.Reversed) throw new DomainException("لا يمكن تعديل قيد معكوس");
+        Lines.Clear();
+        foreach (var l in newLines)
+        {
+            if (l.IsDebit) Lines.Add(JournalEntryLine.CreateDebit(l.AccountId, l.Amount, l.Description));
+            else Lines.Add(JournalEntryLine.CreateCredit(l.AccountId, l.Amount, l.Description));
+        }
+        Recalc();
+    }
+
+    public void Unpost()
+    {
+        if (Status == JournalEntryStatus.Reversed) throw new DomainException("لا يمكن إلغاء ترحيل قيد معكوس");
+        Status = JournalEntryStatus.Draft;
+        PostedAt = null;
+        PostedBy = null;
+    }
+
     public void Post(string postedBy)
     {
         if (Status != JournalEntryStatus.Draft) throw new DomainException("القيد ليس بحالة مسودة");
@@ -66,12 +108,14 @@ public class JournalEntry : BaseEntity
         PostedBy = postedBy;
     }
 
-    public JournalEntry CreateReversal(string reason)
+    public JournalEntry CreateReversal(string reason, string entryNumber)
     {
         if (Status != JournalEntryStatus.Posted) throw new DomainException("لا يمكن عكس قيد غير مرحّل");
+        if (string.IsNullOrWhiteSpace(entryNumber)) throw new DomainException("رقم القيد العكسي مطلوب");
+
         var rev = new JournalEntry
         {
-            EntryNumber = GenerateNumber(),
+            EntryNumber = entryNumber.Trim(),
             EntryDate = DateTime.UtcNow.Date,
             FiscalYearId = FiscalYearId, AccountingPeriodId = AccountingPeriodId,
             Status = JournalEntryStatus.Draft, Source = JournalEntrySource.Manual,
@@ -94,7 +138,4 @@ public class JournalEntry : BaseEntity
         TotalDebit = Lines.Where(l => l.IsDebit).Sum(l => l.Amount);
         TotalCredit = Lines.Where(l => !l.IsDebit).Sum(l => l.Amount);
     }
-
-    private static string GenerateNumber()
-        => $"JE-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid().ToString("N")[..6].ToUpper()}";
 }

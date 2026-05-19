@@ -45,4 +45,20 @@ public class Account : BaseEntity
     public void SetOpeningBalance(decimal b) => OpeningBalance = b;
     public void Deactivate() => IsActive = false;
     public void Activate() => IsActive = true;
+
+    public void UpdateBasic(string nameAr, string? nameEn, string? description)
+    {
+        if (string.IsNullOrWhiteSpace(nameAr)) throw new DomainException("اسم الحساب مطلوب");
+        NameAr = nameAr.Trim();
+        NameEn = string.IsNullOrWhiteSpace(nameEn) ? null : nameEn.Trim();
+        Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+    }
+
+    public void ChangeType(AccountType type, AccountNature nature)
+    {
+        Type = type;
+        Nature = nature;
+    }
+
+    public void MarkAsLeaf(bool isLeaf) => IsLeaf = isLeaf;
 }

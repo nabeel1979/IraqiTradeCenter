@@ -25,6 +25,11 @@ public class AccountingDbContext : DbContext, IAccountingDbContext
     public DbSet<Account> Accounts => Set<Account>();
     public DbSet<JournalEntry> JournalEntries => Set<JournalEntry>();
     public DbSet<JournalEntryLine> JournalEntryLines => Set<JournalEntryLine>();
+    public DbSet<CurrencyRateBulletin> CurrencyRateBulletins => Set<CurrencyRateBulletin>();
+    public DbSet<CurrencyRateLine> CurrencyRateLines => Set<CurrencyRateLine>();
+    public DbSet<JournalVoucherType> JournalVoucherTypes => Set<JournalVoucherType>();
+    public DbSet<CashBox> CashBoxes => Set<CashBox>();
+    public DbSet<CashBoxCurrency> CashBoxCurrencies => Set<CashBoxCurrency>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -43,4 +48,53 @@ public class AccountingDbContext : DbContext, IAccountingDbContext
         }
         return base.SaveChangesAsync(ct);
     }
+
+    public async Task<long> GetNextJournalEntryNumberAsync(int fiscalYearId, CancellationToken ct = default)
+    {
+        // ترقيم متسلسل لكل سنة مالية:
+        //  - نقفل ذرّياً على مستوى السنة المالية بـ sp_getapplock لمنع تكرار الرقم
+        //    عند الطلبات المتزامنة (UPDLOCK وحده لا يحجز شيئاً عند عدم وجود صفوف).
+        //  - نأخذ MAX من كل القيود (سواء محذوفة أم لا) كي لا نُعيد استخدام أرقام
+        //    قيود محذوفة سابقاً — مهم لمسار التدقيق المحاسبي.
+        //  - يجب أن تكون هناك معاملة قائمة من الـ Caller لأن LockOwner='Transaction'
+        //    يضمن استمرار القفل حتى تُلتزم المعاملة (بعد إدراج القيد).
+        if (Database.CurrentTransaction == null)
+        {
+            throw new InvalidOperationException(
+                "GetNextJournalEntryNumberAsync يجب أن تُستدعى داخل معاملة (BeginTransactionAsync).");
+        }
+
+        // (1) نضع قفلاً ذرّياً على الـ resource المرتبط بالسنة المالية.
+        //     LockOwner='Transaction' يضمن أن القفل يبقى رفيعاً حتى Commit/Rollback.
+        var lockSql = @"
+DECLARE @res INT;
+EXEC @res = sp_getapplock
+    @Resource    = @resource,
+    @LockMode    = 'Exclusive',
+    @LockOwner   = 'Transaction',
+    @LockTimeout = 8000;
+IF @res < 0
+    THROW 51000, N'تعذّر الحصول على قفل توليد رقم القيد، حاول مرة أخرى', 1;";
+        var resourceParam = new Microsoft.Data.SqlClient.SqlParameter("@resource",
+            $"acc.JournalEntryNumber.FY:{fiscalYearId}");
+        await Database.ExecuteSqlRawAsync(lockSql, new[] { resourceParam }, ct);
+
+        // (2) نقرأ MAX من كل القيود (نشطة + محذوفة) ضمن نفس السنة، مع +1.
+        //     نأخذ المحذوفة في الحسبان لمنع إعادة استخدام أرقام لقيود سابقة (audit trail).
+        const string maxSql = @"
+SELECT ISNULL(MAX(TRY_CAST(EntryNumber AS BIGINT)), 0) + 1 AS Value
+FROM acc.JournalEntries
+WHERE FiscalYearId = {0}
+  AND TRY_CAST(EntryNumber AS BIGINT) IS NOT NULL";
+
+        return await Database
+            .SqlQueryRaw<long>(maxSql, fiscalYearId)
+            .FirstAsync(ct);
+    }
+
+    public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(
+        CancellationToken ct = default)
+        => Database.BeginTransactionAsync(ct);
+
+    public System.Data.Common.DbConnection GetDbConnection() => Database.GetDbConnection();
 }

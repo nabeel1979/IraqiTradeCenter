@@ -1,4 +1,5 @@
 using System.Text;
+using IraqiTradeCenterCompany.API.Auth;
 using IraqiTradeCenterCompany.API.Extensions;
 using IraqiTradeCenterCompany.API.Middlewares;
 using IraqiTradeCenterCompany.Modules.Accounting.Application;
@@ -16,6 +17,7 @@ using IraqiTradeCenterCompany.SharedKernel.Behaviors;
 using IraqiTradeCenterCompany.SharedKernel.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -46,6 +48,10 @@ builder.Services.AddStoreApplication();
 builder.Services.AddAccountingInfrastructure(builder.Configuration);
 builder.Services.AddInventoryInfrastructure(builder.Configuration);
 builder.Services.AddStoreInfrastructure(builder.Configuration);
+
+// Auth DbContext — نفس قاعدة البيانات مع schema مستقل
+builder.Services.AddDbContext<AuthDbContext>(opt =>
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // 3) MediatR Behaviors المشتركة
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
@@ -80,9 +86,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
-// 7) CORS
+// 7) CORS — في Development يسمح لكل الأصول، في Production يقرأ القائمة من الإعدادات
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
 builder.Services.AddCors(opt =>
-    opt.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
+{
+    opt.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+    if (allowedOrigins is { Length: > 0 })
+    {
+        opt.AddPolicy("AllowFrontends", p =>
+            p.WithOrigins(allowedOrigins)
+             .AllowAnyMethod()
+             .AllowAnyHeader()
+             .AllowCredentials());
+    }
+});
 
 // 8) Swagger
 builder.Services.AddSwaggerGen(c =>
@@ -115,10 +132,14 @@ try
     var inventoryDb  = sp.GetRequiredService<InventoryDbContext>();
     var storeDb      = sp.GetRequiredService<StoreDbContext>();
 
+    var authDb = sp.GetRequiredService<AuthDbContext>();
+
+    await authDb.Database.MigrateAsync();
     await accountingDb.Database.MigrateAsync();
     await inventoryDb.Database.MigrateAsync();
     await storeDb.Database.MigrateAsync();
 
+    await AuthSeeder.SeedAsync(authDb, builder.Configuration);
     await ChartOfAccountsSeeder.SeedAsync(accountingDb);
     await FiscalYearSeeder.SeedAsync(accountingDb);
     await UnitsOfMeasureSeeder.SeedAsync(inventoryDb);
@@ -145,8 +166,11 @@ if (exposeSwagger)
 }
 app.UseSerilogRequestLogging();
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-app.UseHttpsRedirection();
-app.UseCors("AllowAll");
+// HTTPS redirect: يعمل فقط في Development — في Production يدير IIS الـ SSL
+if (app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
+var corsPolicy = allowedOrigins is { Length: > 0 } ? "AllowFrontends" : "AllowAll";
+app.UseCors(corsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

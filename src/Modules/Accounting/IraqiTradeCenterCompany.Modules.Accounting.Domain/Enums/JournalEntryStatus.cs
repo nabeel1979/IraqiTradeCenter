@@ -15,4 +15,9 @@ public enum JournalEntrySource
     System = 9
 }
 
+/// <summary>
+/// نوع البيان (القيد) - افتتاحي أم طبيعي
+/// </summary>
+public enum JournalEntryType { Normal = 1, Opening = 2 }
+
 public enum PeriodStatus { Open = 1, Closed = 2, Locked = 3 }

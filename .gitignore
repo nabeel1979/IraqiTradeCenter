@@ -10,4 +10,9 @@ appsettings.Local.json
 **/appsettings.Local.json
 *.pfx
 publish/
+publish-*/
+publish_*/
 *-API-publish.zip
+*.zip
+# المشروع الأمامي يعيش في repo منفصل (IraqiTradeDashboard)
+IraqiTradeDashboard/
