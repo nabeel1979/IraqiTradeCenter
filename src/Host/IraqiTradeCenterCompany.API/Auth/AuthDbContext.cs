@@ -22,6 +22,7 @@ public class AuthDbContext : DbContext
             e.Property(x => x.PasswordHash).HasMaxLength(512).IsRequired();
             e.Property(x => x.FullName).HasMaxLength(100).IsRequired();
             e.Property(x => x.Role).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Preferences).HasColumnType("nvarchar(max)");
         });
 
         modelBuilder.Entity<CompanySettings>(e =>
