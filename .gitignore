@@ -14,5 +14,6 @@ publish-*/
 publish_*/
 *-API-publish.zip
 *.zip
-# المشروع الأمامي يعيش في repo منفصل (IraqiTradeDashboard)
+# المشروع الأمامي يعيش في repo منفصل (IraqiTradeCenter-Company-Frontend)
+IraqiTradeCenter-Company-Frontend/
 IraqiTradeDashboard/
