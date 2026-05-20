@@ -8,7 +8,7 @@ public static class AuthSeeder
     {
         if (await db.Users.AnyAsync()) return;
 
-        var phone = config["InitialAdmin:Phone"] ?? "07700000000";
+        var phone = config["InitialAdmin:Phone"] ?? "admin";
         var name  = config["InitialAdmin:FullName"] ?? "المدير العام";
         var pass  = config["InitialAdmin:Password"] ?? "Admin@2024";
 
