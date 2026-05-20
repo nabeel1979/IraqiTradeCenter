@@ -30,6 +30,12 @@ public class JournalEntryDto
     public int? VoucherTypeId { get; set; }
     public string? VoucherTypeCode { get; set; }
     public string? VoucherTypeName { get; set; }
+    /// <summary>مصدر القيد: Manual / SalesInvoice / PurchaseInvoice / Payment / Receipt / …</summary>
+    public string Source { get; set; } = "Manual";
+    /// <summary>المرجع المصدر (للقيود المولّدة من فواتير أو حركات أخرى)</summary>
+    public string? ReferenceType { get; set; }
+    public int? ReferenceId { get; set; }
+    public string? ReferenceNumber { get; set; }
     public List<JournalLineDto> Lines { get; set; } = new();
 }
 

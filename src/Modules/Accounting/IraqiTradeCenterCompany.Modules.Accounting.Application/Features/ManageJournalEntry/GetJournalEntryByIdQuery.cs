@@ -39,6 +39,10 @@ public class GetJournalEntryByIdHandler : IRequestHandler<GetJournalEntryByIdQue
             VoucherTypeId = entry.VoucherTypeId,
             VoucherTypeCode = entry.VoucherType?.Code,
             VoucherTypeName = entry.VoucherType?.NameAr,
+            Source = entry.Source.ToString(),
+            ReferenceType = entry.ReferenceType,
+            ReferenceId = entry.ReferenceId,
+            ReferenceNumber = entry.ReferenceNumber,
             Lines = entry.Lines.Select(l => new JournalLineDto
             {
                 Id = l.Id,

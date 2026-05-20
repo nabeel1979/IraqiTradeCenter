@@ -76,6 +76,21 @@ public class AccountsController : BaseApiController
     public async Task<IActionResult> DeleteJournalEntry(int id)
         => HandleResult(await Mediator.Send(new DeleteJournalEntryCommand(id)));
 
+    // ─────────────────────────────────────────────────────────────
+    // تعديل/حذف سند مخصّص (سند قبض/دفع/…). نقاط نهاية منفصلة عن القيود
+    // العادية لأن الـ Update/Delete العاديين يرفضان القيود المُدارة.
+    // ─────────────────────────────────────────────────────────────
+    [HttpPut("vouchers/{id:int}")]
+    public async Task<IActionResult> UpdateVoucherEntry(int id, [FromBody] UpdateVoucherEntryCommand body)
+    {
+        var cmd = body with { Id = id };
+        return HandleResult(await Mediator.Send(cmd));
+    }
+
+    [HttpDelete("vouchers/{id:int}")]
+    public async Task<IActionResult> DeleteVoucherEntry(int id)
+        => HandleResult(await Mediator.Send(new DeleteVoucherEntryCommand(id)));
+
     [HttpGet("trial-balance")]
     public async Task<IActionResult> GetTrialBalance([FromQuery] DateTime from, [FromQuery] DateTime to)
     {

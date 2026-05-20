@@ -56,6 +56,10 @@ public class GetJournalEntriesListHandler : IRequestHandler<GetJournalEntriesLis
             VoucherTypeId = e.VoucherTypeId,
             VoucherTypeCode = e.VoucherType?.Code,
             VoucherTypeName = e.VoucherType?.NameAr,
+            Source = e.Source.ToString(),
+            ReferenceType = e.ReferenceType,
+            ReferenceId = e.ReferenceId,
+            ReferenceNumber = e.ReferenceNumber,
             Lines = e.Lines.Select(l => new JournalLineDto
             {
                 Id = l.Id,

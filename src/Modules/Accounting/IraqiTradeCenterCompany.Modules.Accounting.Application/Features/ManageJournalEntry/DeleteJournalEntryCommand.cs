@@ -21,6 +21,12 @@ public class DeleteJournalEntryHandler : IRequestHandler<DeleteJournalEntryComma
         if (entry.Status == JournalEntryStatus.Reversed)
             return Result.Failure<bool>("لا يمكن حذف قيد معكوس");
 
+        // ‎ممنوع الحذف من واجهة "القيود اليومية" إذا كان القيد مولّداً من مصدر آخر
+        if (entry.VoucherTypeId.HasValue)
+            return Result.Failure<bool>("هذا القيد مولَّد من سند مخصّص — يُحذف من نافذة السند نفسه");
+        if (entry.Source != JournalEntrySource.Manual)
+            return Result.Failure<bool>($"هذا القيد مولَّد من ({entry.Source}) — يُحذف من نافذة المصدر");
+
         entry.MarkAsDeleted();
         foreach (var line in entry.Lines) line.MarkAsDeleted();
 
