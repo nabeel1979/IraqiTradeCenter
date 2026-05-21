@@ -40,6 +40,17 @@ public class PostJournalEntryHandler : IRequestHandler<PostJournalEntryCommand, 
             var currencyCheck = await EnsureCurrencyHasActiveBulletin(request.Currency, request.EntryDate, ct);
             if (currencyCheck != null) return Result.Failure<int>(currencyCheck);
 
+            // ‎فحص قواعد الصناديق: منع استخدام حسابات الصناديق في قيد عام،
+            // ‎واحترام سقوف المدين/الدائن لكل صندوق بكل عملة.
+            var cashBoxCheck = await CashBoxGuard.ValidateAsync(
+                _db,
+                request.Lines.Select(l => new CashBoxGuard.LineSnapshot(l.AccountId, l.IsDebit, l.Amount)).ToList(),
+                request.Currency,
+                request.VoucherTypeId,
+                excludeJournalEntryId: null,
+                ct);
+            if (cashBoxCheck != null) return Result.Failure<int>(cashBoxCheck);
+
             // معاملة صريحة لضمان: GetNextNumber + INSERT ذرّيان → يمنع تكرار رقم القيد
             // عند طلبات متزامنة. القفل sp_getapplock داخل GetNextJournalEntryNumberAsync
             // يبقى مرفوعاً حتى Commit/Rollback.
@@ -57,10 +68,18 @@ public class PostJournalEntryHandler : IRequestHandler<PostJournalEntryCommand, 
             var nextNum = await _db.GetNextJournalEntryNumberAsync(fyId, ct);
             var entryNumber = nextNum.ToString();
 
+            // توليد تسلسل سند مستقل لكل نوع (PV-1, PV-2, RV-1 …) عند وجود VoucherTypeId
+            int? voucherSeq = null;
+            if (request.VoucherTypeId.HasValue)
+            {
+                voucherSeq = await _db.GetNextVoucherSequenceAsync(request.VoucherTypeId.Value, ct);
+            }
+
             var entry = JournalEntry.Create(request.EntryDate, fyId, periodId,
                 JournalEntrySource.Manual, request.Description,
                 type: request.EntryType, currency: request.Currency,
-                entryNumber: entryNumber, voucherTypeId: request.VoucherTypeId);
+                entryNumber: entryNumber, voucherTypeId: request.VoucherTypeId,
+                voucherSequence: voucherSeq);
 
             foreach (var l in request.Lines)
             {

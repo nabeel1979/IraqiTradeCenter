@@ -46,10 +46,11 @@ public class AccountsController : BaseApiController
     public async Task<IActionResult> GetJournalEntries([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20,
         [FromQuery] string? status = null, [FromQuery] string? search = null,
         [FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null,
-        [FromQuery] int? voucherTypeId = null)
+        [FromQuery] int? voucherTypeId = null,
+        [FromQuery] bool excludeSidebarVoucherTypes = false)
     {
         var data = await Mediator.Send(new GetJournalEntriesListQuery(
-            pageNumber, pageSize, status, search, fromDate, toDate, voucherTypeId));
+            pageNumber, pageSize, status, search, fromDate, toDate, voucherTypeId, excludeSidebarVoucherTypes));
         return Ok(new { success = true, data });
     }
 
@@ -92,9 +93,17 @@ public class AccountsController : BaseApiController
         => HandleResult(await Mediator.Send(new DeleteVoucherEntryCommand(id)));
 
     [HttpGet("trial-balance")]
-    public async Task<IActionResult> GetTrialBalance([FromQuery] DateTime from, [FromQuery] DateTime to)
+    public async Task<IActionResult> GetTrialBalance(
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to,
+        [FromQuery] string? currency = null,
+        [FromQuery] bool valuated = false,
+        [FromQuery] int? maxLevel = null,
+        [FromQuery] bool leavesOnly = true,
+        [FromQuery] bool includeDraft = false)
     {
-        var data = await Mediator.Send(new GetTrialBalanceQuery(from, to));
+        var data = await Mediator.Send(new GetTrialBalanceQuery(
+            from, to, currency, valuated, maxLevel, leavesOnly, includeDraft));
         return Ok(new { success = true, data });
     }
 

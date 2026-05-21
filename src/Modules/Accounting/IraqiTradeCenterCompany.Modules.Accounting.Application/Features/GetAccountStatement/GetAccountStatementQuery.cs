@@ -146,9 +146,12 @@ SELECT
     e.Source        AS Source,
     e.ReferenceType AS ReferenceType,
     e.ReferenceId   AS ReferenceId,
-    e.ReferenceNumber AS ReferenceNumber
+    e.ReferenceNumber AS ReferenceNumber,
+    vt.Code         AS VoucherTypeCode,
+    e.VoucherSequence AS VoucherSequence
 FROM acc.JournalEntryLines l
 INNER JOIN acc.JournalEntries e ON e.Id = l.JournalEntryId
+LEFT JOIN acc.JournalVoucherTypes vt ON vt.Id = e.VoucherTypeId
 WHERE l.IsDeleted = 0 AND e.IsDeleted = 0
   AND e.[Status] IN (" + string.Join(",", statusInts) + @")
   AND e.EntryType = 1
@@ -163,7 +166,8 @@ ORDER BY e.EntryDate, e.Id, l.Id;";
 
         var rawList = new List<(int LineId, int EntryId, DateTime EntryDate, string EntryNumber, string EntryDesc,
             string EntryCurrency, int AccountId, bool IsDebit, decimal Amount, string? LineDesc,
-            int EntryTypeInt, int SourceInt, string? RefType, int? RefId, string? RefNumber)>();
+            int EntryTypeInt, int SourceInt, string? RefType, int? RefId, string? RefNumber,
+            string? VoucherTypeCode, int? VoucherSequence)>();
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = inPeriodSql;
@@ -189,7 +193,9 @@ ORDER BY e.EntryDate, e.Id, l.Id;";
                     reader.GetInt32(11),
                     reader.IsDBNull(12) ? null : reader.GetString(12),
                     reader.IsDBNull(13) ? null : reader.GetInt32(13),
-                    reader.IsDBNull(14) ? null : reader.GetString(14)
+                    reader.IsDBNull(14) ? null : reader.GetString(14),
+                    reader.IsDBNull(15) ? null : reader.GetString(15),
+                    reader.IsDBNull(16) ? null : reader.GetInt32(16)
                 ));
             }
         }
@@ -296,7 +302,9 @@ GROUP BY e.Currency;";
             r.SourceInt,
             r.RefType,
             r.RefId,
-            r.RefNumber
+            r.RefNumber,
+            r.VoucherTypeCode,
+            r.VoucherSequence
         }).ToList();
 
         var accountIds = lines.Select(l => l.AccountId).Distinct().ToList();
@@ -351,6 +359,11 @@ GROUP BY e.Currency;";
                 ReferenceType = l.RefType,
                 ReferenceId = l.RefId,
                 ReferenceNumber = l.RefNumber,
+                VoucherTypeCode = l.VoucherTypeCode,
+                VoucherSequence = l.VoucherSequence,
+                VoucherNumber = (l.VoucherSequence.HasValue && !string.IsNullOrWhiteSpace(l.VoucherTypeCode))
+                    ? $"{l.VoucherTypeCode}-{l.VoucherSequence.Value}"
+                    : null,
             });
         }
 

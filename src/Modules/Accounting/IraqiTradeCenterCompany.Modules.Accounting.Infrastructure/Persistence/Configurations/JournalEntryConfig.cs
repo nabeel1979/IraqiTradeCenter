@@ -26,6 +26,10 @@ public class JournalEntryConfig : IEntityTypeConfiguration<JournalEntry>
         b.HasIndex(x => x.Status);
         b.HasIndex(x => new { x.ReferenceType, x.ReferenceId });
         b.HasIndex(x => x.VoucherTypeId);
+        // Unique sequence per voucher type (only when VoucherTypeId & VoucherSequence are not null)
+        b.HasIndex(x => new { x.VoucherTypeId, x.VoucherSequence })
+            .HasFilter("[VoucherTypeId] IS NOT NULL AND [VoucherSequence] IS NOT NULL")
+            .IsUnique();
         b.HasMany(x => x.Lines).WithOne().HasForeignKey(l => l.JournalEntryId).OnDelete(DeleteBehavior.Cascade);
         b.HasOne(x => x.VoucherType)
             .WithMany()

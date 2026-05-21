@@ -92,6 +92,42 @@ WHERE FiscalYearId = {0}
             .FirstAsync(ct);
     }
 
+    public async Task<int> GetNextVoucherSequenceAsync(int voucherTypeId, CancellationToken ct = default)
+    {
+        // ترقيم مستقل لكل نوع سند: PV-1, PV-2 … RV-1 … (يبدأ من 1 لكل نوع).
+        // نفس نمط GetNextJournalEntryNumberAsync لكن المورد مفصول حسب VoucherTypeId.
+        if (Database.CurrentTransaction == null)
+        {
+            throw new InvalidOperationException(
+                "GetNextVoucherSequenceAsync يجب أن تُستدعى داخل معاملة (BeginTransactionAsync).");
+        }
+
+        var lockSql = @"
+DECLARE @res INT;
+EXEC @res = sp_getapplock
+    @Resource    = @resource,
+    @LockMode    = 'Exclusive',
+    @LockOwner   = 'Transaction',
+    @LockTimeout = 8000;
+IF @res < 0
+    THROW 51000, N'تعذّر الحصول على قفل توليد رقم السند، حاول مرة أخرى', 1;";
+        var resourceParam = new Microsoft.Data.SqlClient.SqlParameter("@resource",
+            $"acc.VoucherSequence.VT:{voucherTypeId}");
+        await Database.ExecuteSqlRawAsync(lockSql, new[] { resourceParam }, ct);
+
+        // نقرأ MAX من كل القيود (نشطة + محذوفة) لنفس نوع السند، مع +1.
+        // إدراج المحذوفة يحفظ تسلسل التدقيق ويمنع إعادة استخدام نفس رقم سند.
+        const string maxSql = @"
+SELECT ISNULL(MAX(VoucherSequence), 0) + 1 AS Value
+FROM acc.JournalEntries
+WHERE VoucherTypeId = {0}
+  AND VoucherSequence IS NOT NULL";
+
+        return await Database
+            .SqlQueryRaw<int>(maxSql, voucherTypeId)
+            .FirstAsync(ct);
+    }
+
     public Task<Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction> BeginTransactionAsync(
         CancellationToken ct = default)
         => Database.BeginTransactionAsync(ct);

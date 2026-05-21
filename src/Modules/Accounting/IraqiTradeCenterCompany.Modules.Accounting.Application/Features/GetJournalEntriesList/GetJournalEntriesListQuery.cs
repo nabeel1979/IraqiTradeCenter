@@ -11,5 +11,10 @@ public record GetJournalEntriesListQuery(
     string? SearchTerm = null,
     DateTime? FromDate = null,
     DateTime? ToDate = null,
-    int? VoucherTypeId = null
+    int? VoucherTypeId = null,
+    /// <summary>
+    /// عند true: استبعد القيود التي نوع سندها مفعَّل في القائمة الجانبية (ShowInSidebar=true).
+    /// مفيد لصفحة "القيود اليومية" التي تعرض فقط القيود غير المُسندة إلى أنواع سندات لها صفحات مخصّصة.
+    /// </summary>
+    bool ExcludeSidebarVoucherTypes = false
 ) : IRequest<PagedResult<JournalEntryDto>>;

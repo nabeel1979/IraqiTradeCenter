@@ -27,9 +27,28 @@ public class GetJournalEntriesListHandler : IRequestHandler<GetJournalEntriesLis
         if (!string.IsNullOrWhiteSpace(req.Status) &&
             Enum.TryParse<JournalEntryStatus>(req.Status, true, out var s))
             q = q.Where(e => e.Status == s);
-        if (req.FromDate.HasValue) q = q.Where(e => e.EntryDate >= req.FromDate);
-        if (req.ToDate.HasValue)   q = q.Where(e => e.EntryDate <= req.ToDate);
+        // ‎فلتر التاريخ: نعتمد حدوداً شاملة لليوم بأكمله بصرف النظر عن مكوّن الوقت
+        // ‎المخزَّن في EntryDate. (FromDate = بداية اليوم، ToDate = نهاية اليوم 23:59:59.9999999)
+        // ‎بدون هذا التطبيع تُستبعد قيود تاريخها = ToDate لأنّ وقتها > 00:00:00.
+        if (req.FromDate.HasValue)
+        {
+            var fromDay = req.FromDate.Value.Date;
+            q = q.Where(e => e.EntryDate >= fromDay);
+        }
+        if (req.ToDate.HasValue)
+        {
+            var toDayEnd = req.ToDate.Value.Date.AddDays(1).AddTicks(-1);
+            q = q.Where(e => e.EntryDate <= toDayEnd);
+        }
         if (req.VoucherTypeId.HasValue) q = q.Where(e => e.VoucherTypeId == req.VoucherTypeId.Value);
+
+        // استبعاد القيود التي نوع سندها مفعَّل في القائمة الجانبية
+        // (لتجنّب التكرار: تلك الأنواع لديها صفحات تقارير مخصصة)
+        if (req.ExcludeSidebarVoucherTypes && !req.VoucherTypeId.HasValue)
+        {
+            q = q.Where(e => e.VoucherTypeId == null
+                          || (e.VoucherType != null && !e.VoucherType.ShowInSidebar));
+        }
 
         var total = await q.CountAsync(ct);
         var entries = await q.OrderByDescending(e => e.EntryDate).ThenByDescending(e => e.Id)
@@ -56,6 +75,10 @@ public class GetJournalEntriesListHandler : IRequestHandler<GetJournalEntriesLis
             VoucherTypeId = e.VoucherTypeId,
             VoucherTypeCode = e.VoucherType?.Code,
             VoucherTypeName = e.VoucherType?.NameAr,
+            VoucherSequence = e.VoucherSequence,
+            VoucherNumber = (e.VoucherSequence.HasValue && e.VoucherType != null)
+                ? $"{e.VoucherType.Code}-{e.VoucherSequence.Value}"
+                : null,
             Source = e.Source.ToString(),
             ReferenceType = e.ReferenceType,
             ReferenceId = e.ReferenceId,

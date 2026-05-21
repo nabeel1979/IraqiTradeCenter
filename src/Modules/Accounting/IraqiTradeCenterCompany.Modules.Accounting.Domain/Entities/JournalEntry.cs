@@ -17,6 +17,12 @@ public class JournalEntry : BaseEntity
     /// <summary>نوع السند المستخدم في إنشاء هذا القيد (سند قبض، سند دفع، …) — اختياري</summary>
     public int? VoucherTypeId { get; private set; }
     public virtual JournalVoucherType? VoucherType { get; private set; }
+    /// <summary>
+    /// رقم تسلسلي مخصّص لكل نوع سند (يبدأ من 1 لكل VoucherType على حدة).
+    /// عند العرض في الواجهة: {VoucherType.Code}-{VoucherSequence}  مثل "PV-1", "RV-1".
+    /// يبقى NULL للقيود اليدوية التي لا ترتبط بنوع سند.
+    /// </summary>
+    public int? VoucherSequence { get; private set; }
     public string Currency { get; private set; } = "IQD";
     public string Description { get; private set; } = default!;
     public decimal TotalDebit { get; private set; }
@@ -34,7 +40,8 @@ public class JournalEntry : BaseEntity
     public static JournalEntry Create(DateTime date, int fyId, int periodId, JournalEntrySource source,
                                        string description, string? refType = null, int? refId = null, string? refNumber = null,
                                        JournalEntryType type = JournalEntryType.Normal, string currency = "IQD",
-                                       string? entryNumber = null, int? voucherTypeId = null)
+                                       string? entryNumber = null, int? voucherTypeId = null,
+                                       int? voucherSequence = null)
     {
         if (string.IsNullOrWhiteSpace(entryNumber))
             throw new DomainException("رقم القيد مطلوب");
@@ -46,6 +53,7 @@ public class JournalEntry : BaseEntity
             Status = JournalEntryStatus.Draft, Source = source,
             EntryType = type,
             VoucherTypeId = voucherTypeId,
+            VoucherSequence = voucherSequence,
             Currency = string.IsNullOrWhiteSpace(currency) ? "IQD" : currency.Trim().ToUpperInvariant(),
             Description = string.IsNullOrWhiteSpace(description) ? "—" : description.Trim(),
             ReferenceType = refType, ReferenceId = refId, ReferenceNumber = refNumber

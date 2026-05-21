@@ -29,6 +29,13 @@ public interface IAccountingDbContext
     Task<long> GetNextJournalEntryNumberAsync(int fiscalYearId, CancellationToken ct = default);
 
     /// <summary>
+    /// الحصول على التسلسل التالي لرقم السند ضمن نوع سند محدد (يبدأ من 1 لكل نوع).
+    /// يُستعمل لتوليد أرقام مثل PV-1, PV-2, RV-1 … بحسب رمز نوع السند في الواجهة.
+    /// يجب استدعاؤها داخل معاملة لضمان الذرّية ومنع تكرار التسلسل.
+    /// </summary>
+    Task<int> GetNextVoucherSequenceAsync(int voucherTypeId, CancellationToken ct = default);
+
+    /// <summary>
     /// بدء معاملة قاعدة بيانات صريحة (للأمر يحتاج ذرية عبر عدّة عمليات).
     /// </summary>
     Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken ct = default);

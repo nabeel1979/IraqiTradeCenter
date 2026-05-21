@@ -1,3 +1,4 @@
+using IraqiTradeCenterCompany.Modules.Accounting.Application.Internal;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Persistence;
 using IraqiTradeCenterCompany.Modules.Accounting.Domain.Enums;
 using IraqiTradeCenterCompany.Modules.Accounting.Domain.Exceptions;
@@ -69,6 +70,16 @@ public class UpdateVoucherEntryHandler : IRequestHandler<UpdateVoucherEntryComma
             // التحقق من تسعير العملة
             var currencyCheck = await EnsureCurrencyHasActiveBulletin(req.Currency, req.EntryDate, ct);
             if (currencyCheck != null) return Result.Failure<int>(currencyCheck);
+
+            // ‎فحص قواعد الصناديق (سقوف + منع استخدامها في قيد غير سند)
+            var cashBoxCheck = await CashBoxGuard.ValidateAsync(
+                _db,
+                req.Lines.Select(l => new CashBoxGuard.LineSnapshot(l.AccountId, l.IsDebit, l.Amount)).ToList(),
+                req.Currency,
+                entry.VoucherTypeId,
+                excludeJournalEntryId: entry.Id,
+                ct);
+            if (cashBoxCheck != null) return Result.Failure<int>(cashBoxCheck);
 
             var wasPosted = entry.Status == JournalEntryStatus.Posted;
             if (wasPosted) entry.Unpost();

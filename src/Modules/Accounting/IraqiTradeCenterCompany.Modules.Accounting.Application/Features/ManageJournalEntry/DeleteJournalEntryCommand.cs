@@ -21,9 +21,18 @@ public class DeleteJournalEntryHandler : IRequestHandler<DeleteJournalEntryComma
         if (entry.Status == JournalEntryStatus.Reversed)
             return Result.Failure<bool>("لا يمكن حذف قيد معكوس");
 
-        // ‎ممنوع الحذف من واجهة "القيود اليومية" إذا كان القيد مولّداً من مصدر آخر
+        // ‎ممنوع الحذف من واجهة "القيود اليومية" إذا كان القيد مولّداً من سند
+        // ‎مخصّص غير مختلط (Debit/Credit). أنواع السندات المختلطة (Mixed)
+        // ‎تُحذف من نفس صفحة القيود اليومية.
         if (entry.VoucherTypeId.HasValue)
-            return Result.Failure<bool>("هذا القيد مولَّد من سند مخصّص — يُحذف من نافذة السند نفسه");
+        {
+            var vtNature = await _db.JournalVoucherTypes.AsNoTracking()
+                .Where(v => v.Id == entry.VoucherTypeId.Value)
+                .Select(v => (Domain.Enums.VoucherNature?)v.Nature)
+                .FirstOrDefaultAsync(ct);
+            if (vtNature != Domain.Enums.VoucherNature.Mixed)
+                return Result.Failure<bool>("هذا القيد مولَّد من سند مخصّص — يُحذف من نافذة السند نفسه");
+        }
         if (entry.Source != JournalEntrySource.Manual)
             return Result.Failure<bool>($"هذا القيد مولَّد من ({entry.Source}) — يُحذف من نافذة المصدر");
 

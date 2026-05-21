@@ -30,6 +30,10 @@ public class JournalEntryDto
     public int? VoucherTypeId { get; set; }
     public string? VoucherTypeCode { get; set; }
     public string? VoucherTypeName { get; set; }
+    /// <summary>التسلسل الخاص بنوع السند (يبدأ من 1 لكل نوع)</summary>
+    public int? VoucherSequence { get; set; }
+    /// <summary>رقم السند المُهيّأ للعرض: "{Code}-{Sequence}" مثل "PV-1"</summary>
+    public string? VoucherNumber { get; set; }
     /// <summary>مصدر القيد: Manual / SalesInvoice / PurchaseInvoice / Payment / Receipt / …</summary>
     public string Source { get; set; } = "Manual";
     /// <summary>المرجع المصدر (للقيود المولّدة من فواتير أو حركات أخرى)</summary>
@@ -49,14 +53,76 @@ public class JournalLineDto
     public string? Description { get; set; }
 }
 
+/// <summary>
+/// سطر ميزان مراجعة موسَّع — يتضمَّن أرصدة الفترة السابقة (افتتاحي مدين/دائن)،
+/// حركة الفترة الحالية، والرصيد النهائي مقسَّماً لمدين/دائن.
+/// </summary>
 public class TrialBalanceRowDto
 {
     public int AccountId { get; set; }
     public string AccountCode { get; set; } = default!;
     public string AccountName { get; set; } = default!;
-    public decimal Debit { get; set; }
-    public decimal Credit { get; set; }
-    public decimal Balance { get; set; }
+    /// <summary>نوع الحساب: Asset/Liability/Equity/Revenue/Expense</summary>
+    public string AccountType { get; set; } = default!;
+    /// <summary>طبيعة الحساب: Debit/Credit</summary>
+    public string AccountNature { get; set; } = default!;
+    public int Level { get; set; }
+    public bool IsLeaf { get; set; }
+    public int? ParentId { get; set; }
+
+    // ── الفترة السابقة (الافتتاحي قبل تاريخ "من")
+    public decimal OpeningDebit { get; set; }
+    public decimal OpeningCredit { get; set; }
+
+    // ── الفترة الحالية (الحركة بين "من" و "إلى")
+    public decimal PeriodDebit { get; set; }
+    public decimal PeriodCredit { get; set; }
+
+    // ── الرصيد النهائي مقسَّم لجانبَي الميزان
+    public decimal ClosingDebit { get; set; }
+    public decimal ClosingCredit { get; set; }
+}
+
+/// <summary>
+/// تقرير ميزان المراجعة الكامل (صفوف + إجماليات + معلومات التقويم/النشرة).
+/// </summary>
+public class TrialBalanceDto
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+
+    /// <summary>فلتر العملة المُطبَّق ("" = الكل)</summary>
+    public string? Currency { get; set; }
+    /// <summary>true = الأرقام مُقوَّمة بالعملة الأساسية</summary>
+    public bool Valuated { get; set; }
+    /// <summary>العملة الأساسية المستخدَمة في التقويم</summary>
+    public string BaseCurrency { get; set; } = "IQD";
+    /// <summary>اسم النشرة المستخدَمة في التقويم (إن وُجدت)</summary>
+    public string? FxBulletinName { get; set; }
+    /// <summary>تاريخ سريان النشرة (إن وُجدت)</summary>
+    public DateTime? FxBulletinEffectiveAt { get; set; }
+    /// <summary>true إذا لم نجد سعراً لعملة واحدة وتمّ استعمال مضاعف 1</summary>
+    public bool FxUsedFallback { get; set; }
+
+    public int? MaxLevel { get; set; }
+    public bool LeavesOnly { get; set; }
+
+    public List<TrialBalanceRowDto> Rows { get; set; } = new();
+
+    // ── الإجماليات
+    public decimal TotalOpeningDebit { get; set; }
+    public decimal TotalOpeningCredit { get; set; }
+    public decimal TotalPeriodDebit { get; set; }
+    public decimal TotalPeriodCredit { get; set; }
+    public decimal TotalClosingDebit { get; set; }
+    public decimal TotalClosingCredit { get; set; }
+
+    /// <summary>الفرق بين الإيرادات والمصاريف خلال الفترة (نتيجة الفترة قبل الضرائب)</summary>
+    public decimal NetIncome { get; set; }
+    /// <summary>إجمالي حركة حسابات الإيرادات في الفترة الحالية (دائن − مدين)</summary>
+    public decimal TotalRevenue { get; set; }
+    /// <summary>إجمالي حركة حسابات المصاريف في الفترة الحالية (مدين − دائن)</summary>
+    public decimal TotalExpense { get; set; }
 }
 
 /// <summary>
@@ -90,6 +156,12 @@ public class AccountStatementRowDto
     public int? ReferenceId { get; set; }
     /// <summary>رقم/كود المرجع لأصل القيد (إن وُجد)</summary>
     public string? ReferenceNumber { get; set; }
+    /// <summary>رقم السند المُهيّأ للعرض ("PV-1") — null للقيود اليدوية</summary>
+    public string? VoucherNumber { get; set; }
+    /// <summary>رمز نوع السند ("PV", "RV", "JV") — null للقيود اليدوية</summary>
+    public string? VoucherTypeCode { get; set; }
+    /// <summary>التسلسل ضمن نوع السند (يبدأ من 1 لكل نوع)</summary>
+    public int? VoucherSequence { get; set; }
 }
 
 /// <summary>

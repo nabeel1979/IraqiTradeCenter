@@ -1,3 +1,4 @@
+using IraqiTradeCenterCompany.Modules.Accounting.Application.Internal;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Persistence;
 using IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities;
 using IraqiTradeCenterCompany.Modules.Accounting.Domain.Enums;
@@ -45,9 +46,17 @@ public class UpdateJournalEntryHandler : IRequestHandler<UpdateJournalEntryComma
                 return Result.Failure<int>("لا يمكن تعديل قيد معكوس");
 
             // منع التعديل من واجهة "القيود اليومية" إذا كان القيد مولّداً من سند مخصّص
-            // أو من مصدر آخر (فاتورة، حركة مخزون، …) — يجب تعديله من نفس النافذة الذي تولّد منها.
+            // غير مختلط (Debit/Credit) — يجب تعديله من نافذة السند المبسّطة.
+            // أنواع السندات المختلطة (Mixed) تُحرَّر هنا مباشرةً بنفس واجهة القيود اليومية.
             if (entry.VoucherTypeId.HasValue)
-                return Result.Failure<int>("هذا القيد مولَّد من سند مخصّص — تعدّل من نافذة السند نفسه");
+            {
+                var vtNature = await _db.JournalVoucherTypes.AsNoTracking()
+                    .Where(v => v.Id == entry.VoucherTypeId.Value)
+                    .Select(v => (Domain.Enums.VoucherNature?)v.Nature)
+                    .FirstOrDefaultAsync(ct);
+                if (vtNature != Domain.Enums.VoucherNature.Mixed)
+                    return Result.Failure<int>("هذا القيد مولَّد من سند مخصّص — تعدّل من نافذة السند نفسه");
+            }
             if (entry.Source != JournalEntrySource.Manual)
                 return Result.Failure<int>($"هذا القيد مولَّد من ({entry.Source}) — تعدّل من نافذة المصدر");
 
@@ -70,6 +79,16 @@ public class UpdateJournalEntryHandler : IRequestHandler<UpdateJournalEntryComma
             // التحقق من تسعير العملة في نشرة الأسعار
             var currencyCheck = await EnsureCurrencyHasActiveBulletin(req.Currency, req.EntryDate, ct);
             if (currencyCheck != null) return Result.Failure<int>(currencyCheck);
+
+            // ‎فحص قواعد الصناديق (سقوف + منع استخدامها في قيد عام)
+            var cashBoxCheck = await CashBoxGuard.ValidateAsync(
+                _db,
+                req.Lines.Select(l => new CashBoxGuard.LineSnapshot(l.AccountId, l.IsDebit, l.Amount)).ToList(),
+                req.Currency,
+                req.VoucherTypeId,
+                excludeJournalEntryId: entry.Id,
+                ct);
+            if (cashBoxCheck != null) return Result.Failure<int>(cashBoxCheck);
 
             // التحقق من نوع السند إن وُجد
             if (req.VoucherTypeId.HasValue)
