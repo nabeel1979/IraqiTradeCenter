@@ -16,6 +16,17 @@ public abstract class BaseEntity
         DeletedAt = DateTime.UtcNow;
         UpdatedBy = by;
     }
+
+    /// <summary>
+    /// إلغاء الحذف الناعم (يُستخدم في حالات نادرة كإحياء كيانات نظامية تُنشأ
+    /// تلقائياً مع كود فريد قد سبق حذفه).
+    /// </summary>
+    public void Restore(string? by = null)
+    {
+        IsDeleted = false;
+        DeletedAt = null;
+        UpdatedBy = by;
+    }
     public void SetCreated(string? by) { CreatedAt = DateTime.UtcNow; CreatedBy = by; }
     public void SetUpdated(string? by) { UpdatedAt = DateTime.UtcNow; UpdatedBy = by; }
 }

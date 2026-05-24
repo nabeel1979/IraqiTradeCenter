@@ -48,8 +48,36 @@ public class UpdateVoucherEntryHandler : IRequestHandler<UpdateVoucherEntryComma
             if (entry.Status == JournalEntryStatus.Reversed)
                 return Result.Failure<int>("لا يمكن تعديل قيد معكوس");
 
+            // ‎قفل قيود المناقلات بين الصناديق
+            if (entry.ReferenceType == "CashBoxTransfer" || entry.ReferenceType == "CashBoxTransferReversal")
+                return Result.Failure<int>(
+                    "هذا القيد مولَّد من مناقلة بين صندوقَين — لا يُعدَّل من نافذة السندات. " +
+                    "افتح صفحة الصناديق ⇒ تبويب 'المناقلات' وقم بالتراجع عن الاستلام أو الإلغاء أولاً.");
+
             if (!entry.VoucherTypeId.HasValue)
                 return Result.Failure<int>("هذا القيد ليس مولَّداً من سند — استخدم تعديل القيد العادي");
+
+            // ‎حارس السنة المالية النشطة:
+            //   التاريخ الأصلي للسند (المخزَّن) والتاريخ الجديد المُرسَل من
+            //   الواجهة كلاهما يجب أن يقعا ضمن نطاق السنة المالية المُفَعَّلة.
+            //   لا يستطيع المستخدم الالتفاف على القيد بتغيير حقل التاريخ.
+            var activeFy = await _db.FiscalYears.AsNoTracking()
+                .FirstOrDefaultAsync(f => f.IsActive, ct);
+            if (activeFy != null)
+            {
+                var originalDate = entry.EntryDate.Date;
+                if (originalDate < activeFy.StartDate.Date || originalDate > activeFy.EndDate.Date)
+                {
+                    return Result.Failure<int>(
+                        $"تاريخ هذا السند ({originalDate:yyyy-MM-dd}) خارج السنة المالية النشطة '{activeFy.Name}'. لتعديله، فعِّل السنة المالية المناسبة أولاً.");
+                }
+                var newDate = req.EntryDate.Date;
+                if (newDate < activeFy.StartDate.Date || newDate > activeFy.EndDate.Date)
+                {
+                    return Result.Failure<int>(
+                        $"التاريخ الجديد ({newDate:yyyy-MM-dd}) خارج السنة المالية النشطة '{activeFy.Name}'.");
+                }
+            }
 
             if (req.Lines == null || req.Lines.Count < 2)
                 return Result.Failure<int>("السند لازم سطرين على الأقل");
@@ -81,14 +109,16 @@ public class UpdateVoucherEntryHandler : IRequestHandler<UpdateVoucherEntryComma
                 ct);
             if (cashBoxCheck != null) return Result.Failure<int>(cashBoxCheck);
 
-            var wasPosted = entry.Status == JournalEntryStatus.Posted;
-            if (wasPosted) entry.Unpost();
+            // ‎نفك الترحيل قبل تعديل البنود ثم نُرحّل من جديد فقط إذا طلب المستخدم.
+            // ‎بهذه الطريقة يستطيع المستخدم تحويل قيد مُرحَّل إلى مسودة عبر إلغاء
+            // ‎علامة "ترحيل فوري" وحفظ السند.
+            if (entry.Status == JournalEntryStatus.Posted) entry.Unpost();
 
             entry.UpdateBasic(req.EntryDate, req.Description, entry.EntryType, req.Currency, entry.VoucherTypeId);
             entry.ReplaceLines(req.Lines.Select(l =>
                 (l.AccountId, l.IsDebit, l.Amount, l.Description)).ToList());
 
-            if (req.PostImmediately || wasPosted)
+            if (req.PostImmediately)
                 entry.Post(_currentUser.UserId?.ToString() ?? "system");
 
             await _db.SaveChangesAsync(ct);

@@ -1,7 +1,10 @@
 using System.Text;
 using IraqiTradeCenterCompany.API.Auth;
+using IraqiTradeCenterCompany.API.Auth.Permissions;
 using IraqiTradeCenterCompany.API.Extensions;
+using IraqiTradeCenterCompany.API.Licensing;
 using IraqiTradeCenterCompany.API.Middlewares;
+using IraqiTradeCenterCompany.API.Trash;
 using IraqiTradeCenterCompany.Modules.Accounting.Application;
 using IraqiTradeCenterCompany.Modules.Accounting.Infrastructure;
 using IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence;
@@ -17,7 +20,6 @@ using IraqiTradeCenterCompany.SharedKernel.Behaviors;
 using IraqiTradeCenterCompany.SharedKernel.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -52,6 +54,13 @@ builder.Services.AddStoreInfrastructure(builder.Configuration);
 // Auth DbContext — نفس قاعدة البيانات مع schema مستقل
 builder.Services.AddDbContext<AuthDbContext>(opt =>
     opt.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Permissions service + كاش في الذاكرة
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddScoped<IVoucherTypePermissionsSync, VoucherTypePermissionsSync>();
+builder.Services.AddUnifiedTrash();
+builder.Services.AddSystemLicensing();
 
 // 3) MediatR Behaviors المشتركة
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
@@ -139,11 +148,25 @@ try
     await inventoryDb.Database.MigrateAsync();
     await storeDb.Database.MigrateAsync();
 
-    await AuthSeeder.SeedAsync(authDb, builder.Configuration);
+    // 1) Seed المحاسبي أولاً ليكون لدينا voucher types (إن وُجدت) قبل مزامنة الصلاحيات
     await ChartOfAccountsSeeder.SeedAsync(accountingDb);
     await FiscalYearSeeder.SeedAsync(accountingDb);
+
+    // 2) مزامنة الصلاحيات الديناميكية لأنواع السندات + هجرة legacy + Bootstrap كامل.
+    //    تُنفّذ قبل AuthSeeder حتى يربط الـ seeder الأدوار الافتراضية بأكواد الصلاحيات
+    //    الديناميكية الموجودة بالفعل في جدول Permissions.
+    var vtSync = sp.GetRequiredService<IVoucherTypePermissionsSync>();
+    await vtSync.SyncAsync();
+
+    // 3) Seed الأدوار والمستخدم الأول مع تمرير voucher type codes لربطها بالأدوار
+    var voucherCodes = await accountingDb.JournalVoucherTypes
+        .AsNoTracking().Select(t => t.Code).ToListAsync();
+    await AuthSeeder.SeedAsync(authDb, builder.Configuration, voucherCodes);
     await UnitsOfMeasureSeeder.SeedAsync(inventoryDb);
     await DefaultWarehouseSeeder.SeedAsync(inventoryDb);
+
+    // 4) Bootstrap لجداول الترخيص في schema 'sys' (لا تحتاج DbContext)
+    await LicenseBootstrapper.EnsureCreatedAsync(sp, builder.Configuration);
 
     Log.Information("Database migrations and seed completed successfully.");
 }
@@ -173,6 +196,11 @@ var corsPolicy = allowedOrigins is { Length: > 0 } ? "AllowFrontends" : "AllowAl
 app.UseCors(corsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
+
+// ‎حجب الـ API بعد المصادقة وقبل الـ controllers — كي يبقى من تسجيل الدخول
+// ‎مفتوحاً وكي نسمح فقط بـ /api/license/* وما يلزم لتطبيق شفرة جديدة.
+app.UseMiddleware<LicenseEnforcementMiddleware>();
+
 app.MapControllers();
 
 // الجذر كان بدون مسار فيظهر للمستخدم "لا شيء" أو 404 على IIS — هذا للتأكد أن التطبيق يعمل

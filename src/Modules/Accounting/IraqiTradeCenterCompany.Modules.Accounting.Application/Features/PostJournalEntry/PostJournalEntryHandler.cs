@@ -87,7 +87,15 @@ public class PostJournalEntryHandler : IRequestHandler<PostJournalEntryCommand, 
                 else entry.AddCredit(l.AccountId, l.Amount, l.Description);
             }
 
-            if (request.PostImmediately)
+            // الترحيل التلقائي يحدث فقط إذا طلبه المستخدم وكان يملك صلاحية الترحيل.
+            // المستخدم بدون صلاحية: يبقى القيد Draft ليُرحَّل لاحقاً من مستخدم آخر مخوَّل.
+            // أكواد الصلاحية تطابق Auth/Permissions/PermissionRegistry.cs (لا يمكن الإشارة لها مباشرة لتجنّب التبعية بين المودولز).
+            const string PostPermission = "Accounting.JournalEntries.Post";
+            const string VoucherPostPermission = "Accounting.Vouchers.Post";
+            var requiredPostPerm = request.VoucherTypeId.HasValue ? VoucherPostPermission : PostPermission;
+            var canPost = _currentUser.IsSuperAdmin || _currentUser.HasPermission(requiredPostPerm);
+
+            if (request.PostImmediately && canPost)
                 entry.Post(_currentUser.UserId?.ToString() ?? "system");
 
             await _db.JournalEntries.AddAsync(entry, ct);

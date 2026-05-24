@@ -29,6 +29,7 @@ public class GetFiscalYearsHandler : IRequestHandler<GetFiscalYearsQuery, List<F
             EndDate = y.EndDate,
             IsClosed = y.IsClosed,
             ClosedAt = y.ClosedAt,
+            IsActive = y.IsActive,
             Periods = periods.Where(p => p.FiscalYearId == y.Id).Select(p => new AccountingPeriodDto
             {
                 Id = p.Id,

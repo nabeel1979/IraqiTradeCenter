@@ -45,6 +45,36 @@ public class UpdateJournalEntryHandler : IRequestHandler<UpdateJournalEntryComma
             if (entry.Status == JournalEntryStatus.Reversed)
                 return Result.Failure<int>("لا يمكن تعديل قيد معكوس");
 
+            // ‎قفل قيود المناقلات بين الصناديق: لا تُعدَّل من هذه النافذة إطلاقاً —
+            // ‎أيّ تعديل يجب أن يمرّ عبر نافذة المناقلات (إلغاء/تراجع عن استلام/تعديل).
+            if (entry.ReferenceType == "CashBoxTransfer" || entry.ReferenceType == "CashBoxTransferReversal")
+                return Result.Failure<int>(
+                    "هذا القيد مولَّد من مناقلة بين صندوقَين — لا يمكن تعديله من نافذة القيود اليومية. " +
+                    "افتح صفحة الصناديق ⇒ تبويب 'المناقلات' وقم بالتراجع عن الاستلام أو الإلغاء أولاً.");
+
+            // ‎حارس السنة المالية النشطة:
+            //   يُمنع تعديل قيد إذا كان تاريخه الأصلي (في قاعدة البيانات) خارج
+            //   نطاق السنة المالية المُفَعَّلة. لا يُسمح بالالتفاف على ذلك بتغيير
+            //   حقل التاريخ في الـ payload لأن المرجع هو القيمة المخزَّنة.
+            var activeFy = await _db.FiscalYears.AsNoTracking()
+                .FirstOrDefaultAsync(f => f.IsActive, ct);
+            if (activeFy != null)
+            {
+                var originalDate = entry.EntryDate.Date;
+                if (originalDate < activeFy.StartDate.Date || originalDate > activeFy.EndDate.Date)
+                {
+                    return Result.Failure<int>(
+                        $"تاريخ هذا القيد ({originalDate:yyyy-MM-dd}) خارج السنة المالية النشطة '{activeFy.Name}'. لتعديله، فعِّل السنة المالية المناسبة أولاً.");
+                }
+                // ‎إضافة: التاريخ الجديد المُرسَل من الواجهة يجب أن يكون كذلك ضمن السنة النشطة.
+                var newDate = req.EntryDate.Date;
+                if (newDate < activeFy.StartDate.Date || newDate > activeFy.EndDate.Date)
+                {
+                    return Result.Failure<int>(
+                        $"التاريخ الجديد ({newDate:yyyy-MM-dd}) خارج السنة المالية النشطة '{activeFy.Name}'.");
+                }
+            }
+
             // منع التعديل من واجهة "القيود اليومية" إذا كان القيد مولّداً من سند مخصّص
             // غير مختلط (Debit/Credit) — يجب تعديله من نافذة السند المبسّطة.
             // أنواع السندات المختلطة (Mixed) تُحرَّر هنا مباشرةً بنفس واجهة القيود اليومية.
@@ -99,16 +129,16 @@ public class UpdateJournalEntryHandler : IRequestHandler<UpdateJournalEntryComma
                 if (!vt.IsEnabled) return Result.Failure<int>($"نوع السند '{vt.NameAr}' معطّل");
             }
 
-            // إذا القيد مرحَّل، نُرجعه إلى مسودة قبل التعديل
-            var wasPosted = entry.Status == JournalEntryStatus.Posted;
-            if (wasPosted) entry.Unpost();
+            // إذا القيد مرحَّل، نُرجعه إلى مسودة قبل التعديل.
+            // ثم نُعيد ترحيله فقط إذا طلب المستخدم — هذا يتيح فك الترحيل عند
+            // إلغاء علامة "ترحيل فوري" أثناء التعديل.
+            if (entry.Status == JournalEntryStatus.Posted) entry.Unpost();
 
             entry.UpdateBasic(req.EntryDate, req.Description, req.EntryType, req.Currency, req.VoucherTypeId);
             entry.ReplaceLines(req.Lines.Select(l =>
                 (l.AccountId, l.IsDebit, l.Amount, l.Description)).ToList());
 
-            // إعادة الترحيل إذا طُلب أو إذا كان مرحَّلاً أصلاً
-            if (req.PostImmediately || wasPosted)
+            if (req.PostImmediately)
                 entry.Post(_currentUser.UserId?.ToString() ?? "system");
 
             await _db.SaveChangesAsync(ct);

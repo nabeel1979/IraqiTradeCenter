@@ -13,7 +13,41 @@ public class AccountDto
     public int Level { get; set; }
     public bool IsLeaf { get; set; }
     public decimal OpeningBalance { get; set; }
+    /// <summary>
+    /// هل الحساب مفعَّل؟ الحسابات المعطَّلة (IsActive=false) لا تظهر في شاشات
+    /// اختيار الحسابات (قيود/صناديق/سندات…) لكن كودها يبقى محجوزاً في قاعدة
+    /// البيانات، لذلك يجب إظهارها في شاشة شجرة الحسابات حتى يعرف المستخدم لماذا
+    /// لا يستطيع إعادة استخدام كود معيّن.
+    /// </summary>
+    public bool IsActive { get; set; }
+    /// <summary>
+    /// هل الحساب مرتبط بسطر قيد محاسبي، أو بصندوق، أو بنوع سند (كحساب افتراضي مدين/دائن)؟
+    /// عندما يكون <c>true</c> يجب على الواجهة حجب أزرار إضافة الفروع والحذف لتفادي
+    /// كسر السلامة المرجعية. الحماية الأساسية تبقى في الـ Handlers على الخادم.
+    /// </summary>
+    public bool IsUsed { get; set; }
     public List<AccountDto> Children { get; set; } = new();
+}
+
+/// <summary>
+/// مدخل في سلة مهملات شجرة الحسابات — تمثيل مسطّح (بدون أبناء) مع سياق الأب.
+/// </summary>
+public class TrashedAccountDto
+{
+    public int Id { get; set; }
+    public string Code { get; set; } = default!;
+    public string NameAr { get; set; } = default!;
+    public AccountType Type { get; set; }
+    public AccountNature Nature { get; set; }
+    public int Level { get; set; }
+    public bool IsLeaf { get; set; }
+    public int? ParentId { get; set; }
+    public string? ParentCode { get; set; }
+    public string? ParentNameAr { get; set; }
+    /// <summary>هل الأب نفسه ما زال محذوفاً؟ في هذه الحالة لا يمكن الاستعادة قبل استعادته.</summary>
+    public bool ParentIsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
+    public string? DeletedBy { get; set; }
 }
 
 public class JournalEntryDto
@@ -211,5 +245,28 @@ public class AccountStatementDto
     /// </summary>
     public Dictionary<string, decimal> CurrencyMultipliers { get; set; } = new();
 
+    /// <summary>
+    /// تفاصيل قيود الافتتاح (EntryType=2) التي تخص الحساب وتقع حتى نهاية الفترة.
+    /// تُعرض في رأس الكشف بشكل واضح ليرى المستخدم مصدر الرصيد الافتتاحي،
+    /// ولا تظهر بين الحركات لمنع الازدواجية مع OpeningBalance.
+    /// </summary>
+    public List<OpeningEntryRowDto> OpeningEntries { get; set; } = new();
+
     public List<AccountStatementRowDto> Rows { get; set; } = new();
+}
+
+/// <summary>سطر قيد افتتاح مفصَّل (يُعرض في رأس كشف الحساب).</summary>
+public class OpeningEntryRowDto
+{
+    public int EntryId { get; set; }
+    public string EntryNumber { get; set; } = default!;
+    public DateTime EntryDate { get; set; }
+    public string Currency { get; set; } = "IQD";
+    public string? Description { get; set; }
+    public decimal Debit { get; set; }
+    public decimal Credit { get; set; }
+    /// <summary>صافي السطر (مدين − دائن) بعملة القيد.</summary>
+    public decimal Net { get; set; }
+    /// <summary>صافي السطر بالعملة الأساسية بعد التقويم.</summary>
+    public decimal NetValuated { get; set; }
 }

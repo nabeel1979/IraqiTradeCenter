@@ -1,3 +1,4 @@
+using IraqiTradeCenterCompany.API.Auth.Permissions;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.JournalVoucherTypes;
 using IraqiTradeCenterCompany.SharedKernel.Exceptions;
 using Microsoft.AspNetCore.Mvc;
@@ -7,10 +8,18 @@ namespace IraqiTradeCenterCompany.API.Controllers;
 /// <summary>
 /// إدارة أنواع السندات/القيود (سند قبض، سند دفع، سند تسوية، …) مع
 /// إمكانية ربط كل نوع بحسابي مدين/دائن افتراضيين من الدليل المحاسبي.
+/// كل عملية CUD/Toggle/Move تُحدِّث الصلاحيات الديناميكية المرتبطة بالنوع.
 /// </summary>
 [Route("api/journal-voucher-types")]
 public class JournalVoucherTypesController : BaseApiController
 {
+    private readonly IVoucherTypePermissionsSync _permsSync;
+
+    public JournalVoucherTypesController(IVoucherTypePermissionsSync permsSync)
+    {
+        _permsSync = permsSync;
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetAll([FromQuery] bool? enabledOnly = null)
     {
@@ -32,6 +41,7 @@ public class JournalVoucherTypesController : BaseApiController
         try
         {
             var id = await Mediator.Send(new CreateJournalVoucherTypeCommand(body));
+            await _permsSync.SyncAsync();
             return Ok(new { success = true, data = new { id } });
         }
         catch (DomainException ex)
@@ -46,6 +56,8 @@ public class JournalVoucherTypesController : BaseApiController
         try
         {
             await Mediator.Send(new UpdateJournalVoucherTypeCommand(id, body));
+            // ‎الاسم العربي ربما تغيّر → إعادة المزامنة لتحديث NameAr في جدول Permissions
+            await _permsSync.SyncAsync();
             return Ok(new { success = true });
         }
         catch (DomainException ex)
@@ -74,6 +86,8 @@ public class JournalVoucherTypesController : BaseApiController
         try
         {
             await Mediator.Send(new MoveJournalVoucherTypeCommand(id, body.Direction));
+            // ‎ترتيب العرض تغيّر → إعادة المزامنة لتحديث DisplayOrder للصلاحيات
+            await _permsSync.SyncAsync();
             return Ok(new { success = true });
         }
         catch (DomainException ex)
@@ -88,6 +102,8 @@ public class JournalVoucherTypesController : BaseApiController
         try
         {
             await Mediator.Send(new DeleteJournalVoucherTypeCommand(id));
+            // ‎النوع حُذف منطقياً → نزيل صلاحياته من جدول Permissions
+            await _permsSync.SyncAsync();
             return Ok(new { success = true });
         }
         catch (DomainException ex)

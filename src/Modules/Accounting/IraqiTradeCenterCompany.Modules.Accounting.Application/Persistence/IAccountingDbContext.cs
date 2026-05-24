@@ -19,6 +19,7 @@ public interface IAccountingDbContext
     DbSet<JournalVoucherType> JournalVoucherTypes { get; }
     DbSet<CashBox> CashBoxes { get; }
     DbSet<CashBoxCurrency> CashBoxCurrencies { get; }
+    DbSet<CashBoxTransfer> CashBoxTransfers { get; }
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 
     /// <summary>

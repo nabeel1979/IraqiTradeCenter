@@ -1,3 +1,4 @@
+using IraqiTradeCenterCompany.API.Auth.Permissions;
 using IraqiTradeCenterCompany.API.Settings;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,6 +12,14 @@ public class AuthDbContext : DbContext
     public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
     public DbSet<Currency> Currencies => Set<Currency>();
 
+    // ── Permissions module
+    public DbSet<Permission>              Permissions             => Set<Permission>();
+    public DbSet<Role>                    Roles                   => Set<Role>();
+    public DbSet<RolePermission>          RolePermissions         => Set<RolePermission>();
+    public DbSet<UserRole>                UserRoles               => Set<UserRole>();
+    public DbSet<UserPermissionOverride>  UserPermissionOverrides => Set<UserPermissionOverride>();
+    public DbSet<UserCashBox>             UserCashBoxes           => Set<UserCashBox>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema("auth");
@@ -23,6 +32,69 @@ public class AuthDbContext : DbContext
             e.Property(x => x.FullName).HasMaxLength(100).IsRequired();
             e.Property(x => x.Role).HasMaxLength(50).IsRequired();
             e.Property(x => x.Preferences).HasColumnType("nvarchar(max)");
+        });
+
+        // ── Permission (lookup, مفتاحه الكود نفسه)
+        modelBuilder.Entity<Permission>(e =>
+        {
+            e.ToTable("Permissions", "auth");
+            e.HasKey(x => x.Code);
+            e.Property(x => x.Code).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Module).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Resource).HasMaxLength(50).IsRequired();
+            e.Property(x => x.Action).HasMaxLength(20).IsRequired();
+            e.Property(x => x.NameAr).HasMaxLength(150).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(300);
+            e.HasIndex(x => x.Module);
+        });
+
+        // ── Role
+        modelBuilder.Entity<Role>(e =>
+        {
+            e.ToTable("Roles", "auth");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Code).IsUnique();
+            e.Property(x => x.Code).HasMaxLength(50).IsRequired();
+            e.Property(x => x.NameAr).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Description).HasMaxLength(300);
+        });
+
+        // ── RolePermission (M:N) — composite PK
+        modelBuilder.Entity<RolePermission>(e =>
+        {
+            e.ToTable("RolePermissions", "auth");
+            e.HasKey(x => new { x.RoleId, x.PermissionCode });
+            e.Property(x => x.PermissionCode).HasMaxLength(100);
+            e.HasOne(x => x.Role).WithMany(r => r.Permissions).HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Permission).WithMany().HasForeignKey(x => x.PermissionCode).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── UserRole (M:N) — composite PK
+        modelBuilder.Entity<UserRole>(e =>
+        {
+            e.ToTable("UserRoles", "auth");
+            e.HasKey(x => new { x.UserId, x.RoleId });
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Role).WithMany(r => r.Users).HasForeignKey(x => x.RoleId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── UserPermissionOverride — composite PK
+        modelBuilder.Entity<UserPermissionOverride>(e =>
+        {
+            e.ToTable("UserPermissionOverrides", "auth");
+            e.HasKey(x => new { x.UserId, x.PermissionCode });
+            e.Property(x => x.PermissionCode).HasMaxLength(100);
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Permission).WithMany().HasForeignKey(x => x.PermissionCode).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── UserCashBox — composite PK (CashBox FK معالج كرابط منطقي فقط لأنه بـ schema آخر)
+        modelBuilder.Entity<UserCashBox>(e =>
+        {
+            e.ToTable("UserCashBoxes", "auth");
+            e.HasKey(x => new { x.UserId, x.CashBoxId });
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.CashBoxId);
         });
 
         modelBuilder.Entity<CompanySettings>(e =>

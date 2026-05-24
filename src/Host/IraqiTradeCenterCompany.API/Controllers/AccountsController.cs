@@ -1,5 +1,6 @@
 using IraqiTradeCenterCompany.API.Auth;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.GetAccountStatement;
+using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.GetAccountsTrash;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.GetAccountsTree;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.GetJournalEntriesList;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.GetTrialBalance;
@@ -21,9 +22,9 @@ public class AccountsController : BaseApiController
     }
 
     [HttpGet("tree")]
-    public async Task<IActionResult> GetTree()
+    public async Task<IActionResult> GetTree([FromQuery] bool includeInactive = false)
     {
-        var tree = await Mediator.Send(new GetAccountsTreeQuery());
+        var tree = await Mediator.Send(new GetAccountsTreeQuery(includeInactive));
         return Ok(new { success = true, data = tree });
     }
 
@@ -41,6 +42,36 @@ public class AccountsController : BaseApiController
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
         => HandleResult(await Mediator.Send(new DeleteAccountCommand(id)));
+
+    // ─────────────────────────────────────────────────────────────
+    // سلة المهملات: قائمة + استعادة + حذف نهائي
+    // ─────────────────────────────────────────────────────────────
+
+    /// <summary>قائمة الحسابات الموجودة في سلة المهملات (محذوفة ناعماً).</summary>
+    [HttpGet("trash")]
+    public async Task<IActionResult> GetTrash()
+    {
+        var data = await Mediator.Send(new GetAccountsTrashQuery());
+        return Ok(new { success = true, data });
+    }
+
+    /// <summary>استعادة حساب من سلة المهملات (يعكس الحذف الناعم).</summary>
+    [HttpPost("{id:int}/restore")]
+    public async Task<IActionResult> Restore(int id)
+        => HandleResult(await Mediator.Send(new RestoreAccountCommand(id)));
+
+    /// <summary>حذف نهائي للحساب من قاعدة البيانات. مسموح فقط من سلة المهملات.</summary>
+    [HttpDelete("{id:int}/permanent")]
+    public async Task<IActionResult> PermanentlyDelete(int id)
+        => HandleResult(await Mediator.Send(new PermanentlyDeleteAccountCommand(id)));
+
+    /// <summary>تفصيل استخدام الحساب — لشرح للمستخدم لماذا لا يمكن إضافة فرع/حذف.</summary>
+    [HttpGet("{id:int}/usage")]
+    public async Task<IActionResult> GetUsage(int id)
+    {
+        var data = await Mediator.Send(new GetAccountUsageQuery(id));
+        return Ok(new { success = true, data });
+    }
 
     [HttpGet("journal-entries")]
     public async Task<IActionResult> GetJournalEntries([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 20,

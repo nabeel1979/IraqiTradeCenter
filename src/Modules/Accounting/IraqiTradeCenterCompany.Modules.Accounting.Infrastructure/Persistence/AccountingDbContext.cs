@@ -30,6 +30,7 @@ public class AccountingDbContext : DbContext, IAccountingDbContext
     public DbSet<JournalVoucherType> JournalVoucherTypes => Set<JournalVoucherType>();
     public DbSet<CashBox> CashBoxes => Set<CashBox>();
     public DbSet<CashBoxCurrency> CashBoxCurrencies => Set<CashBoxCurrency>();
+    public DbSet<CashBoxTransfer> CashBoxTransfers => Set<CashBoxTransfer>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

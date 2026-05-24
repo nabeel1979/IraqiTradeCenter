@@ -21,6 +21,25 @@ public class DeleteJournalEntryHandler : IRequestHandler<DeleteJournalEntryComma
         if (entry.Status == JournalEntryStatus.Reversed)
             return Result.Failure<bool>("لا يمكن حذف قيد معكوس");
 
+        // ‎قفل قيود المناقلات بين الصناديق
+        if (entry.ReferenceType == "CashBoxTransfer" || entry.ReferenceType == "CashBoxTransferReversal")
+            return Result.Failure<bool>(
+                "هذا القيد مولَّد من مناقلة بين صندوقَين — لا يُحذف من نافذة القيود اليومية. " +
+                "افتح صفحة الصناديق ⇒ تبويب 'المناقلات' لإلغاء المناقلة أو التراجع عن الاستلام.");
+
+        // ‎حارس السنة المالية النشطة: لا يُحذف قيد ينتمي لسنة مالية غير المُفَعَّلة.
+        var activeFy = await _db.FiscalYears.AsNoTracking()
+            .FirstOrDefaultAsync(f => f.IsActive, ct);
+        if (activeFy != null)
+        {
+            var d = entry.EntryDate.Date;
+            if (d < activeFy.StartDate.Date || d > activeFy.EndDate.Date)
+            {
+                return Result.Failure<bool>(
+                    $"تاريخ هذا القيد ({d:yyyy-MM-dd}) خارج السنة المالية النشطة '{activeFy.Name}'. لحذفه، فعِّل السنة المالية المناسبة أولاً.");
+            }
+        }
+
         // ‎ممنوع الحذف من واجهة "القيود اليومية" إذا كان القيد مولّداً من سند
         // ‎مخصّص غير مختلط (Debit/Credit). أنواع السندات المختلطة (Mixed)
         // ‎تُحذف من نفس صفحة القيود اليومية.

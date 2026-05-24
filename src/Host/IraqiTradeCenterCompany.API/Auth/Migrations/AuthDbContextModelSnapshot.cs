@@ -66,6 +66,162 @@ namespace IraqiTradeCenterCompany.API.Auth.Migrations
                     b.ToTable("Users", "auth");
                 });
 
+            modelBuilder.Entity("IraqiTradeCenterCompany.API.Auth.Permissions.Permission", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Resource")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Code");
+
+                    b.HasIndex("Module");
+
+                    b.ToTable("Permissions", "auth");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.API.Auth.Permissions.Role", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSuperAdmin")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsSystemRole")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("Roles", "auth");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.API.Auth.Permissions.RolePermission", b =>
+                {
+                    b.Property<int>("RoleId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PermissionCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("RoleId", "PermissionCode");
+
+                    b.HasIndex("PermissionCode");
+
+                    b.ToTable("RolePermissions", "auth");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.API.Auth.Permissions.UserCashBox", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CashBoxId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("CanPay")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("CanReceive")
+                        .HasColumnType("bit");
+
+                    b.HasKey("UserId", "CashBoxId");
+
+                    b.HasIndex("CashBoxId");
+
+                    b.ToTable("UserCashBoxes", "auth");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.API.Auth.Permissions.UserPermissionOverride", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("PermissionCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<bool>("IsGranted")
+                        .HasColumnType("bit");
+
+                    b.HasKey("UserId", "PermissionCode");
+
+                    b.HasIndex("PermissionCode");
+
+                    b.ToTable("UserPermissionOverrides", "auth");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.API.Auth.Permissions.UserRole", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("RoleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("UserId", "RoleId");
+
+                    b.HasIndex("RoleId");
+
+                    b.ToTable("UserRoles", "auth");
+                });
+
             modelBuilder.Entity("IraqiTradeCenterCompany.API.Settings.CompanySettings", b =>
                 {
                     b.Property<int>("Id")
@@ -182,6 +338,81 @@ namespace IraqiTradeCenterCompany.API.Auth.Migrations
                     b.HasIndex("IsEnabled");
 
                     b.ToTable("Currencies", "auth");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.API.Auth.Permissions.RolePermission", b =>
+                {
+                    b.HasOne("IraqiTradeCenterCompany.API.Auth.Permissions.Permission", "Permission")
+                        .WithMany()
+                        .HasForeignKey("PermissionCode")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IraqiTradeCenterCompany.API.Auth.Permissions.Role", "Role")
+                        .WithMany("Permissions")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Permission");
+
+                    b.Navigation("Role");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.API.Auth.Permissions.UserCashBox", b =>
+                {
+                    b.HasOne("IraqiTradeCenterCompany.API.Auth.CompanyUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.API.Auth.Permissions.UserPermissionOverride", b =>
+                {
+                    b.HasOne("IraqiTradeCenterCompany.API.Auth.Permissions.Permission", "Permission")
+                        .WithMany()
+                        .HasForeignKey("PermissionCode")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IraqiTradeCenterCompany.API.Auth.CompanyUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Permission");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.API.Auth.Permissions.UserRole", b =>
+                {
+                    b.HasOne("IraqiTradeCenterCompany.API.Auth.Permissions.Role", "Role")
+                        .WithMany("Users")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("IraqiTradeCenterCompany.API.Auth.CompanyUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Role");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.API.Auth.Permissions.Role", b =>
+                {
+                    b.Navigation("Permissions");
+
+                    b.Navigation("Users");
                 });
 #pragma warning restore 612, 618
         }

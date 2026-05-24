@@ -93,6 +93,28 @@ public class GetAccountStatementHandler : IRequestHandler<GetAccountStatementQue
 
         var currency = string.IsNullOrWhiteSpace(req.Currency) ? null : req.Currency.Trim().ToUpperInvariant();
 
+        // ───────────────────────────────────────────────────────────
+        // السنة المالية المرجعية لاحتساب رصيد الأرباح/الخسائر:
+        //   حسابات Revenue/Expense (4،5) لا تُرَحَّل أرصدتها بين السنوات،
+        //   فيُقيَّد احتساب الافتتاحي وحركة الفترة لها بـ EntryDate >= @plFyStart.
+        //   الأولوية للسنة المُعَلَّمة كنشطة (IsActive=true)، ثم التي تحتوي @from.
+        // ───────────────────────────────────────────────────────────
+        DateTime? plFyStart = null;
+        var containingFy = await _db.FiscalYears.AsNoTracking()
+            .Where(f => f.StartDate <= fromDate && f.EndDate >= fromDate)
+            .OrderByDescending(f => f.StartDate)
+            .FirstOrDefaultAsync(ct);
+        if (containingFy != null)
+        {
+            plFyStart = containingFy.StartDate.Date;
+        }
+        else
+        {
+            var activeFy = await _db.FiscalYears.AsNoTracking()
+                .FirstOrDefaultAsync(f => f.IsActive, ct);
+            if (activeFy != null) plFyStart = activeFy.StartDate.Date;
+        }
+
         // ─────────────────────────────────────────
         // المصدر الأساسي لأسعار الصرف: أحدث نشرة منشورة سارية على تاريخ نهاية الفترة.
         // إن لم توجد نشرة، نستخدم BaseCurrency + ExchangeRatesJson كسلوك توافقي (legacy).
@@ -129,7 +151,9 @@ public class GetAccountStatementHandler : IRequestHandler<GetAccountStatementQue
         var statusInts = allowedStatuses.Select(s => (int)s).ToArray();
         bool fxFallback = false;
 
-        // الحركات داخل الفترة: النوع Normal فقط — قيود Opening تُعامَل كرصيد افتتاحي ولا تظهر بين الحركات
+        // الحركات داخل الفترة: النوع Normal فقط — قيود Opening تُعامَل كرصيد افتتاحي ولا تظهر بين الحركات.
+        // ملاحظة: حسابات الأرباح/الخسائر (4،5) نقصر حركتها على السنة المالية المرجعية حتى لو
+        //         امتدّ مدى التقرير لسنوات سابقة، لأن قيود تلك السنوات تخصّ نتيجة سنة منفصلة.
         var inPeriodSql = @"
 SELECT 
     l.Id            AS LineId,
@@ -151,11 +175,15 @@ SELECT
     e.VoucherSequence AS VoucherSequence
 FROM acc.JournalEntryLines l
 INNER JOIN acc.JournalEntries e ON e.Id = l.JournalEntryId
+INNER JOIN acc.Accounts a       ON a.Id = l.AccountId
 LEFT JOIN acc.JournalVoucherTypes vt ON vt.Id = e.VoucherTypeId
 WHERE l.IsDeleted = 0 AND e.IsDeleted = 0
   AND e.[Status] IN (" + string.Join(",", statusInts) + @")
   AND e.EntryType = 1
   AND e.EntryDate >= @from AND e.EntryDate <= @to
+  AND (a.[Type] IN (1,2,3)
+       OR (a.[Type] IN (4,5)
+            AND (@plFyStart IS NULL OR e.EntryDate >= @plFyStart)))
   AND (@accountId IS NULL OR l.AccountId = @accountId)
   AND (@currency IS NULL OR e.Currency = @currency)
 ORDER BY e.EntryDate, e.Id, l.Id;";
@@ -175,6 +203,7 @@ ORDER BY e.EntryDate, e.Id, l.Id;";
             AddParam(cmd, "@to", toDate);
             AddParam(cmd, "@accountId", (object?)req.AccountId ?? DBNull.Value);
             AddParam(cmd, "@currency", (object?)currency ?? DBNull.Value);
+            AddParam(cmd, "@plFyStart", (object?)plFyStart ?? DBNull.Value);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
@@ -200,8 +229,10 @@ ORDER BY e.EntryDate, e.Id, l.Id;";
             }
         }
 
-        // الرصيد الافتتاحي = حركات Normal قبل الفترة + كل قيود Opening حتى نهاية الفترة (بصرف النظر عن تاريخها).
-        // قيود Opening (النوع 2) تُعتبر دائماً جزءاً من رصيد الافتتاح، ولا تظهر بين الحركات.
+        // الرصيد الافتتاحي:
+        //   • أصول/خصوم/حقوق ملكية: حركات Normal قبل @from + قيود Opening حتى @to.
+        //   • أرباح/خسائر: حركات Normal من بداية السنة المالية المرجعية حتى @from
+        //                  (لا تُحسب قيود Opening، ولا حركات السنوات السابقة).
         decimal openingBalance = 0m;
         var openingSql = @"
 SELECT 
@@ -209,11 +240,16 @@ SELECT
     ISNULL(SUM(CASE WHEN l.IsDebit = 0 THEN l.Amount ELSE 0 END), 0) AS Cr
 FROM acc.JournalEntryLines l
 INNER JOIN acc.JournalEntries e ON e.Id = l.JournalEntryId
+INNER JOIN acc.Accounts a       ON a.Id = l.AccountId
 WHERE l.IsDeleted = 0 AND e.IsDeleted = 0
   AND e.[Status] IN (" + string.Join(",", statusInts) + @")
   AND (
-        (e.EntryType = 1 AND e.EntryDate < @from)
-     OR (e.EntryType = 2 AND e.EntryDate <= @to)
+        (a.[Type] IN (1,2,3) AND (
+            (e.EntryType = 1 AND e.EntryDate < @from)
+         OR (e.EntryType = 2 AND e.EntryDate <= @to)
+        ))
+     OR (a.[Type] IN (4,5) AND e.EntryType = 1 AND e.EntryDate < @from
+            AND (@plFyStart IS NULL OR e.EntryDate >= @plFyStart))
       )
   AND (@accountId IS NULL OR l.AccountId = @accountId)
   AND (@currency IS NULL OR e.Currency = @currency);";
@@ -225,6 +261,7 @@ WHERE l.IsDeleted = 0 AND e.IsDeleted = 0
             AddParam(cmd, "@to", toDate);
             AddParam(cmd, "@accountId", (object?)req.AccountId ?? DBNull.Value);
             AddParam(cmd, "@currency", (object?)currency ?? DBNull.Value);
+            AddParam(cmd, "@plFyStart", (object?)plFyStart ?? DBNull.Value);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             if (await reader.ReadAsync(ct))
             {
@@ -241,11 +278,16 @@ SELECT e.Currency AS Ccy,
   ISNULL(SUM(CASE WHEN l.IsDebit = 0 THEN l.Amount ELSE 0 END), 0) AS Cr
 FROM acc.JournalEntryLines l
 INNER JOIN acc.JournalEntries e ON e.Id = l.JournalEntryId
+INNER JOIN acc.Accounts a       ON a.Id = l.AccountId
 WHERE l.IsDeleted = 0 AND e.IsDeleted = 0
   AND e.[Status] IN (" + string.Join(",", statusInts) + @")
   AND (
-        (e.EntryType = 1 AND e.EntryDate < @from)
-     OR (e.EntryType = 2 AND e.EntryDate <= @to)
+        (a.[Type] IN (1,2,3) AND (
+            (e.EntryType = 1 AND e.EntryDate < @from)
+         OR (e.EntryType = 2 AND e.EntryDate <= @to)
+        ))
+     OR (a.[Type] IN (4,5) AND e.EntryType = 1 AND e.EntryDate < @from
+            AND (@plFyStart IS NULL OR e.EntryDate >= @plFyStart))
       )
   AND (@accountId IS NULL OR l.AccountId = @accountId)
   AND (@currency IS NULL OR e.Currency = @currency)
@@ -258,6 +300,7 @@ GROUP BY e.Currency;";
             AddParam(cmd2, "@to", toDate);
             AddParam(cmd2, "@accountId", (object?)req.AccountId ?? DBNull.Value);
             AddParam(cmd2, "@currency", (object?)currency ?? DBNull.Value);
+            AddParam(cmd2, "@plFyStart", (object?)plFyStart ?? DBNull.Value);
             await using var reader = await cmd2.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct))
             {
@@ -268,6 +311,62 @@ GROUP BY e.Currency;";
                 var key = (ccy ?? string.Empty).Trim().ToUpperInvariant();
                 if (!string.IsNullOrEmpty(key))
                     openingByCurrency[key] = (openingByCurrency.TryGetValue(key, out var prev) ? prev : 0m) + net;
+            }
+        }
+
+        // ── تفاصيل قيود الافتتاح (EntryType=2) لعرضها في رأس الكشف.
+        // يجمع السطور المتعلقة بالحساب ضمن نفس قيد الافتتاح في صف واحد ليبقى
+        // الكشف مفهوماً، ويعرض المبالغ بعملة القيد + المقوَّم بالعملة الأساسية.
+        var openingEntries = new List<OpeningEntryRowDto>();
+        // قيود الافتتاح تخصّ أساساً الحسابات الميزانية (1،2،3). نُقصّر الاستعلام عليها
+        // ليتسق العرض مع احتساب الافتتاحي.
+        var openingEntriesSql = @"
+SELECT
+    e.Id              AS EntryId,
+    e.EntryNumber     AS EntryNumber,
+    e.EntryDate       AS EntryDate,
+    e.Currency        AS Currency,
+    e.[Description]   AS EntryDescription,
+    ISNULL(SUM(CASE WHEN l.IsDebit = 1 THEN l.Amount ELSE 0 END), 0) AS Debit,
+    ISNULL(SUM(CASE WHEN l.IsDebit = 0 THEN l.Amount ELSE 0 END), 0) AS Credit
+FROM acc.JournalEntryLines l
+INNER JOIN acc.JournalEntries e ON e.Id = l.JournalEntryId
+INNER JOIN acc.Accounts a       ON a.Id = l.AccountId
+WHERE l.IsDeleted = 0 AND e.IsDeleted = 0
+  AND e.[Status] IN (" + string.Join(",", statusInts) + @")
+  AND e.EntryType = 2
+  AND e.EntryDate <= @to
+  AND a.[Type] IN (1,2,3)
+  AND (@accountId IS NULL OR l.AccountId = @accountId)
+  AND (@currency IS NULL OR e.Currency = @currency)
+GROUP BY e.Id, e.EntryNumber, e.EntryDate, e.Currency, e.[Description]
+ORDER BY e.EntryDate, e.EntryNumber;";
+        await using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = openingEntriesSql;
+            AddParam(cmd, "@to", toDate);
+            AddParam(cmd, "@accountId", (object?)req.AccountId ?? DBNull.Value);
+            AddParam(cmd, "@currency", (object?)currency ?? DBNull.Value);
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                var ccy = reader["Currency"]?.ToString() ?? baseCur;
+                var debit = reader.GetDecimal(reader.GetOrdinal("Debit"));
+                var credit = reader.GetDecimal(reader.GetOrdinal("Credit"));
+                var net = debit - credit;
+                var mult = GetMultiplier(ccy, baseCur, rates, ref fxFallback);
+                openingEntries.Add(new OpeningEntryRowDto
+                {
+                    EntryId = reader.GetInt32(reader.GetOrdinal("EntryId")),
+                    EntryNumber = reader["EntryNumber"]?.ToString() ?? "",
+                    EntryDate = reader.GetDateTime(reader.GetOrdinal("EntryDate")),
+                    Currency = ccy,
+                    Description = reader["EntryDescription"]?.ToString(),
+                    Debit = debit,
+                    Credit = credit,
+                    Net = net,
+                    NetValuated = net * mult,
+                });
             }
         }
 
@@ -397,6 +496,7 @@ GROUP BY e.Currency;";
             ClosingBalanceValuated = balanceVal,
             OpeningByCurrency = openingByCurrency,
             CurrencyMultipliers = multipliersByCurrency,
+            OpeningEntries = openingEntries,
             Rows = rows,
         };
     }

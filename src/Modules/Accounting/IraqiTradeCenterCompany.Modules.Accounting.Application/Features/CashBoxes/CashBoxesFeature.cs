@@ -29,7 +29,8 @@ public record CashBoxDto(
     string? AccountName,
     bool IsActive,
     int DisplayOrder,
-    List<CashBoxCurrencyDto> Currencies
+    List<CashBoxCurrencyDto> Currencies,
+    bool HasMovements
 );
 
 public record UpsertCashBoxCurrencyDto(
@@ -74,10 +75,20 @@ public class GetCashBoxesHandler : IRequestHandler<GetCashBoxesQuery, List<CashB
             .OrderBy(x => x.DisplayOrder).ThenBy(x => x.Code)
             .ToListAsync(ct);
 
-        return rows.Select(MapToDto).ToList();
+        // ‎الحسابات التي لها حركات (سطور قيود) — نحسبها مرة واحدة لكل الصناديق
+        var accountIds = rows.Select(r => r.AccountId).Distinct().ToList();
+        var accountsWithMovements = accountIds.Count == 0
+            ? new HashSet<int>()
+            : (await _db.JournalEntryLines.AsNoTracking()
+                .Where(l => accountIds.Contains(l.AccountId))
+                .Select(l => l.AccountId)
+                .Distinct()
+                .ToListAsync(ct)).ToHashSet();
+
+        return rows.Select(x => MapToDto(x, accountsWithMovements.Contains(x.AccountId))).ToList();
     }
 
-    public static CashBoxDto MapToDto(CashBox x) => new(
+    public static CashBoxDto MapToDto(CashBox x, bool hasMovements = false) => new(
         x.Id,
         x.Code,
         x.NameAr,
@@ -91,7 +102,8 @@ public class GetCashBoxesHandler : IRequestHandler<GetCashBoxesQuery, List<CashB
         x.Currencies
             .OrderBy(c => c.Currency)
             .Select(c => new CashBoxCurrencyDto(c.Id, c.Currency, c.DebitLimit, c.CreditLimit, c.IsActive))
-            .ToList()
+            .ToList(),
+        hasMovements
     );
 }
 
@@ -108,7 +120,12 @@ public class GetCashBoxByIdHandler : IRequestHandler<GetCashBoxByIdQuery, CashBo
             .Include(t => t.Account)
             .Include(t => t.Currencies)
             .FirstOrDefaultAsync(t => t.Id == req.Id, ct);
-        return x == null ? null : GetCashBoxesHandler.MapToDto(x);
+        if (x == null) return null;
+
+        var hasMovements = await _db.JournalEntryLines.AsNoTracking()
+            .AnyAsync(l => l.AccountId == x.AccountId, ct);
+
+        return GetCashBoxesHandler.MapToDto(x, hasMovements);
     }
 }
 
@@ -255,6 +272,16 @@ public class DeleteCashBoxHandler : IRequestHandler<DeleteCashBoxCommand, Unit>
             .Include(x => x.Currencies)
             .FirstOrDefaultAsync(x => x.Id == req.Id, ct)
             ?? throw new DomainException("الصندوق غير موجود");
+
+        // ‎الحماية: لا يُسمح بحذف صندوق له حركات (سطور قيود) على حسابه المرتبط.
+        // ‎الحذف هنا soft-delete، لكن الإبقاء يحفظ سلامة المراجع التاريخية.
+        var hasMovements = await _db.JournalEntryLines.AsNoTracking()
+            .AnyAsync(l => l.AccountId == entity.AccountId, ct);
+        if (hasMovements)
+            throw new DomainException(
+                $"لا يمكن حذف الصندوق \"{entity.NameAr}\" لأن الحساب المرتبط به ({entity.AccountId}) عليه حركات محاسبية. " +
+                "يمكنك تعطيله بدلاً من حذفه."
+            );
 
         entity.MarkAsDeleted();
         foreach (var c in entity.Currencies) c.MarkAsDeleted();

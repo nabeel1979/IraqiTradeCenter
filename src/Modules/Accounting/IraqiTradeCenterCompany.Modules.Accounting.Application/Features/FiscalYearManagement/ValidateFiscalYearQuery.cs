@@ -31,12 +31,32 @@ public class ValidateFiscalYearHandler : IRequestHandler<ValidateFiscalYearQuery
             return result;
         }
 
-        var draft = await _db.JournalEntries.AsNoTracking()
-            .Where(e => e.EntryDate >= fy.StartDate && e.EntryDate <= fy.EndDate
-                     && e.Status == JournalEntryStatus.Draft)
-            .CountAsync(ct);
-        result.DraftEntries = draft;
-        if (draft > 0) result.Issues.Add($"يوجد {draft} قيد غير مرحَّل (مسودة)");
+        // ‎الـ global query filter في DbContext يستثني المحذوفين (IsDeleted=1) تلقائياً.
+        // ‎نُحضر تفاصيل القيود حتى يستطيع المستخدم فتحها ومعالجتها (ترحيلها أو حذفها)
+        // ‎بدلاً من مجرد عدّ غامض كان يُلبس عليه ما إذا كان القيد محذوفاً فعلاً أم لا.
+        var draftRefs = await (
+            from e in _db.JournalEntries.AsNoTracking()
+            where e.EntryDate >= fy.StartDate && e.EntryDate <= fy.EndDate
+               && e.Status == JournalEntryStatus.Draft
+            join vt in _db.JournalVoucherTypes.AsNoTracking()
+                on e.VoucherTypeId equals vt.Id into vts
+            from vt in vts.DefaultIfEmpty()
+            orderby e.EntryDate, e.Id
+            select new DraftJournalEntryRefDto
+            {
+                Id = e.Id,
+                EntryNumber = e.EntryNumber,
+                EntryDate = e.EntryDate,
+                Description = e.Description,
+                VoucherTypeCode = vt != null ? vt.Code : null,
+                VoucherSequence = e.VoucherSequence,
+            }
+        ).ToListAsync(ct);
+
+        result.DraftEntries = draftRefs.Count;
+        result.DraftEntriesList = draftRefs;
+        if (draftRefs.Count > 0)
+            result.Issues.Add($"يوجد {draftRefs.Count} قيد غير مرحَّل (مسودة)");
 
         var lines = await (
             from line in _db.JournalEntryLines.AsNoTracking()
