@@ -116,11 +116,39 @@ public class LicenseController : BaseApiController
         return Ok(new { success = true, data = new { code, days = dto.Days } });
     }
 
+    /// <summary>
+    /// (اختبار) إنهاء الترخيص فوراً ليعمل النظام في وضع "قراءة فقط". مخصّص لاختبار
+    /// السلوك بدون انتظار الانتهاء الفعلي. محصور بصلاحية <c>License.Generate</c>.
+    /// </summary>
+    [HttpPost("test-expire")]
+    [RequirePermission(PermissionRegistry.System.License.Generate)]
+    public async Task<IActionResult> TestExpire(CancellationToken ct)
+    {
+        var r = await _svc.TestExpireAsync(CurrentUserId(), ct);
+        if (r.IsSuccess) LicenseEnforcementMiddleware.InvalidateCache();
+        return HandleResult(r);
+    }
+
+    /// <summary>
+    /// (اختبار) إعادة الترخيص للوضع النشط بمدة افتراضية 30 يوم. محصور بصلاحية
+    /// <c>License.Generate</c>.
+    /// </summary>
+    [HttpPost("test-restore")]
+    [RequirePermission(PermissionRegistry.System.License.Generate)]
+    public async Task<IActionResult> TestRestore([FromBody] TestRestoreDto? dto, CancellationToken ct)
+    {
+        var days = dto?.Days is > 0 ? dto.Days : 30;
+        var r = await _svc.TestRestoreAsync(days, CurrentUserId(), ct);
+        if (r.IsSuccess) LicenseEnforcementMiddleware.InvalidateCache();
+        return HandleResult(r);
+    }
+
     private string? CurrentUserId()
         => User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? User.FindFirstValue("sub");
 
-    public sealed class ApplyCodeDto { public string? Code { get; set; } }
-    public sealed class BuyDto       { public int Days { get; set; } }
-    public sealed class GenerateDto  { public int Days { get; set; } }
+    public sealed class ApplyCodeDto    { public string? Code { get; set; } }
+    public sealed class BuyDto          { public int Days { get; set; } }
+    public sealed class GenerateDto     { public int Days { get; set; } }
+    public sealed class TestRestoreDto  { public int Days { get; set; } = 30; }
 }

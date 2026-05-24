@@ -41,4 +41,14 @@ public class TrashItemDto
 
     /// <summary>سبب عدم إمكانية الاستعادة (يظهر كـ tooltip في الواجهة).</summary>
     public string? CannotRestoreReason { get; set; }
+
+    /// <summary>
+    /// هل يسمح بالحذف النهائي؟ يُستخدم لحجب زر "حذف نهائي" في الواجهة على
+    /// عناصر الخطأ الوهمية (التي يُنتجها <c>TrashService</c> عند فشل provider)
+    /// أو على عناصر محمية بقيود تبعية (مثل قيود مرتبطة بمناقلة صندوق).
+    /// </summary>
+    public bool CanPurge { get; set; } = true;
+
+    /// <summary>سبب عدم إمكانية الحذف النهائي (يظهر كـ tooltip في الواجهة).</summary>
+    public string? CannotPurgeReason { get; set; }
 }

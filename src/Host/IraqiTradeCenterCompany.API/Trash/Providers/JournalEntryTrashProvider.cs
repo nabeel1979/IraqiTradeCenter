@@ -21,12 +21,25 @@ public class JournalEntryTrashProvider : ITrashProvider
         // ‎القيود المرتبطة بمناقلات صناديق (إرسال/استلام/عكس) لا تظهر هنا — مالكها
         // ‎هو المناقلة، وتُستعاد/تُحذف نهائياً من سلة المناقلات. عرضها هنا يُسبِّب
         // ‎تعارضاً (FK constraint) عند الحذف النهائي، وحالات معلَّقة عند الاستعادة.
-        var transferLinkedIds = await _db.CashBoxTransfers.IgnoreQueryFilters().AsNoTracking()
-            .SelectMany(t => new[] { (int?)t.SendJournalEntryId, t.ReceiveJournalEntryId, t.ReversalJournalEntryId })
-            .Where(x => x.HasValue)
-            .Select(x => x!.Value)
-            .Distinct()
+        //
+        // ‎ملاحظة: الـ SelectMany فوق مصفوفة inline لا يُترجم لـ SQL في EF Core 8،
+        // ‎لذا نقرأ الأعمدة الثلاثة ونوحّدها في الذاكرة (HashSet) — السجلات قليلة.
+        var transferRefs = await _db.CashBoxTransfers.IgnoreQueryFilters().AsNoTracking()
+            .Select(t => new
+            {
+                t.SendJournalEntryId,
+                t.ReceiveJournalEntryId,
+                t.ReversalJournalEntryId,
+            })
             .ToListAsync(ct);
+
+        var transferLinkedIds = new HashSet<int>();
+        foreach (var t in transferRefs)
+        {
+            transferLinkedIds.Add(t.SendJournalEntryId);
+            if (t.ReceiveJournalEntryId.HasValue)  transferLinkedIds.Add(t.ReceiveJournalEntryId.Value);
+            if (t.ReversalJournalEntryId.HasValue) transferLinkedIds.Add(t.ReversalJournalEntryId.Value);
+        }
 
         var rows = await _db.JournalEntries.IgnoreQueryFilters().AsNoTracking()
             .Where(e => e.IsDeleted && !transferLinkedIds.Contains(e.Id))

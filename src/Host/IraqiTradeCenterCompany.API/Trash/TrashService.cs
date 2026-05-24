@@ -39,6 +39,8 @@ public class TrashService : ITrashService
             {
                 // ‎لا نُسقط الطلب كله إن فشل مزوّد واحد — نضيف عنصراً يوضّح الخطأ
                 // ‎للمستخدم بدل إخفاء النوع كاملاً، ولينتبه المسؤول إلى الخلل.
+                // ‎مهم: نُغلق على هذا العنصر كل من الاستعادة والحذف النهائي لأنه
+                // ‎عنصر وهمي بـ Id=0 — أي محاولة تنفيذ ستفشل بـ "غير موجود".
                 results.Add(new TrashItemDto
                 {
                     EntityType = p.EntityType,
@@ -50,6 +52,8 @@ public class TrashService : ITrashService
                     SubInfo = ex.Message,
                     CanRestore = false,
                     CannotRestoreReason = ex.Message,
+                    CanPurge = false,
+                    CannotPurgeReason = ex.Message,
                 });
             }
         }

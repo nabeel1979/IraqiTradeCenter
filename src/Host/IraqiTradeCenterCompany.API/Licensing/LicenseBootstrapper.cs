@@ -61,10 +61,16 @@ BEGIN
         [AppliedAt]  DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME(),
         [AppliedBy]  NVARCHAR(64)   NULL,
         [Source]     NVARCHAR(16)   NOT NULL DEFAULT N'Code',
-        [Note]       NVARCHAR(500)  NULL
+        [Note]       NVARCHAR(500)  NULL,
+        [RowSig]     NVARCHAR(64)   NULL  -- ‎توقيع الصفّ في سلسلة التواقيع (Hash Chain)
     );
     CREATE UNIQUE INDEX UX_LicenseActivations_Code
         ON [{Schema}].[LicenseActivations]([Code]);
+END
+ELSE IF COL_LENGTH(N'[{Schema}].[LicenseActivations]', 'RowSig') IS NULL
+BEGIN
+    -- ‎ترقية للنُسخ الأقدم: إضافة عمود التوقيع (يبقى NULL لحين توقيع الصفوف الموجودة).
+    ALTER TABLE [{Schema}].[LicenseActivations] ADD [RowSig] NVARCHAR(64) NULL;
 END", ct);
 
         await ExecAsync(cn, $@"
@@ -135,6 +141,75 @@ VALUES (1, @ck, @ak, 1000, N'IQD', 3);";
         {
             await ExecAsync(cn,
                 $"INSERT INTO [{Schema}].[Wallet]([Id],[Balance],[Currency]) VALUES (1, 0, N'IQD');", ct);
+        }
+
+        // ‎توقيع الصفوف الموجودة في سلسلة التواقيع (Hash Chain) إن لم تكن موقَّعة بعد.
+        // ‎هذا "checkpoint": القيم المخزَّنة الآن تُعتبر شرعية، والحماية تبدأ من هنا.
+        await BackfillRowSignaturesAsync(cn, ct);
+    }
+
+    /// <summary>
+    /// عند ترقية النظام (إضافة عمود <c>RowSig</c>): نوقّع الصفوف الموجودة بالترتيب
+    /// التسلسلي. هذا يلتقط الحالة الحالية كنقطة مرجعية — أي تعديل لاحق على
+    /// <c>EndDate</c> أو الحقول الأخرى سيكسر السلسلة ويُكتشف.
+    /// </summary>
+    private static async Task BackfillRowSignaturesAsync(SqlConnection cn, CancellationToken ct)
+    {
+        // ‎اقرأ AuthKey من LicenseConfig (لازم للتوقيع).
+        string? authKey = null;
+        await using (var cmd = cn.CreateCommand())
+        {
+            cmd.CommandText = $"SELECT TOP 1 AuthKey FROM [{Schema}].[LicenseConfig] WHERE Id = 1;";
+            var o = await cmd.ExecuteScalarAsync(ct);
+            if (o != null && o != DBNull.Value) authKey = (string)o;
+        }
+        if (string.IsNullOrEmpty(authKey)) return; // ‎لا config → لا توقيعات.
+
+        // ‎اقرأ كل الصفوف بالترتيب التصاعدي.
+        var rows = new List<(int Id, string Code, int Days, DateTime Start, DateTime End, DateTime AppliedAt, string? Sig)>();
+        await using (var cmd = cn.CreateCommand())
+        {
+            cmd.CommandText = $@"
+SELECT Id, Code, Days, StartDate, EndDate, AppliedAt, RowSig
+FROM [{Schema}].[LicenseActivations]
+ORDER BY Id ASC;";
+            await using var r = await cmd.ExecuteReaderAsync(ct);
+            while (await r.ReadAsync(ct))
+            {
+                rows.Add((
+                    r.GetInt32(0),
+                    r.GetString(1),
+                    r.GetInt32(2),
+                    DateTime.SpecifyKind(r.GetDateTime(3), DateTimeKind.Utc),
+                    DateTime.SpecifyKind(r.GetDateTime(4), DateTimeKind.Utc),
+                    DateTime.SpecifyKind(r.GetDateTime(5), DateTimeKind.Utc),
+                    r.IsDBNull(6) ? null : r.GetString(6)));
+            }
+        }
+
+        // ‎احسب التوقيع المتسلسل وحدِّث الصفوف التي توقيعها NULL فقط.
+        var prev = LicenseChainSigner.Genesis;
+        foreach (var row in rows)
+        {
+            var expected = LicenseChainSigner.ComputeRowSig(
+                authKey, row.Code, row.Days, row.Start, row.End, row.AppliedAt, prev);
+
+            if (string.IsNullOrEmpty(row.Sig))
+            {
+                await using var upd = cn.CreateCommand();
+                upd.CommandText = $@"UPDATE [{Schema}].[LicenseActivations] SET RowSig = @s WHERE Id = @id;";
+                upd.Parameters.AddWithValue("@s",  expected);
+                upd.Parameters.AddWithValue("@id", row.Id);
+                await upd.ExecuteNonQueryAsync(ct);
+                prev = expected;
+            }
+            else
+            {
+                // ‎الصفّ موقَّع مسبقاً — نستخدم القيمة المخزّنة كـ prev للصفّ التالي.
+                // ‎لو القيمة المخزَّنة لا تطابق المتوقَّع، فالصفّ مزوَّر — لكن لا نُصلحه
+                // ‎هنا، ندعه يُكتشف وقت <c>GetStatusAsync</c>.
+                prev = row.Sig!;
+            }
         }
     }
 
