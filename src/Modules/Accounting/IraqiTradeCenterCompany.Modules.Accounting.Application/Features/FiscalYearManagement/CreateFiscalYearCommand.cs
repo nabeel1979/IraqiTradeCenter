@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IraqiTradeCenterCompany.Modules.Accounting.Application.Features.FiscalYearManagement;
 
-public record CreateFiscalYearCommand(string Name, DateTime StartDate, DateTime EndDate) : IRequest<int>;
+public record CreateFiscalYearCommand(string Name, DateTime StartDate, DateTime EndDate, string? NameEn = null) : IRequest<int>;
 
 public class CreateFiscalYearHandler : IRequestHandler<CreateFiscalYearCommand, int>
 {
@@ -36,7 +36,7 @@ public class CreateFiscalYearHandler : IRequestHandler<CreateFiscalYearCommand, 
         if (overlap)
             throw new DomainException("الفترة الزمنية تتداخل مع سنة مالية أخرى");
 
-        var fy = FiscalYear.Create(trimmed, req.StartDate, req.EndDate);
+        var fy = FiscalYear.Create(trimmed, req.StartDate, req.EndDate, req.NameEn);
 
         // ‎إن لم تكن هناك سنة مالية نشطة في النظام، نُفعّل هذه تلقائياً
         // ‎(تجربة سلسة: السنة الأولى تُصبح نشطة بدون خطوة إضافية).

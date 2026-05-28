@@ -3,6 +3,7 @@ using IraqiTradeCenterCompany.Modules.Accounting.Application.Persistence;
 using IraqiTradeCenterCompany.Modules.Accounting.Domain.Enums;
 using IraqiTradeCenterCompany.Modules.Accounting.Domain.Exceptions;
 using IraqiTradeCenterCompany.SharedKernel.Exceptions;
+using IraqiTradeCenterCompany.SharedKernel.Interfaces;
 using IraqiTradeCenterCompany.SharedKernel.Models;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -23,19 +24,24 @@ public record UpdateVoucherEntryCommand(
     string Description,
     string Currency,
     List<UpdateJournalLine> Lines,
-    bool PostImmediately = true
+    bool PostImmediately = true,
+    /// <summary>الرقم اليدوي للسند (شيك، إيصال خارجي، …).</summary>
+    string? ManualNumber = null
 ) : IRequest<Result<int>>;
 
 public class UpdateVoucherEntryHandler : IRequestHandler<UpdateVoucherEntryCommand, Result<int>>
 {
     private readonly IAccountingDbContext _db;
     private readonly IraqiTradeCenterCompany.SharedKernel.Interfaces.ICurrentUserService _currentUser;
+    private readonly IAuditLogger _audit;
 
     public UpdateVoucherEntryHandler(IAccountingDbContext db,
-        IraqiTradeCenterCompany.SharedKernel.Interfaces.ICurrentUserService currentUser)
+        IraqiTradeCenterCompany.SharedKernel.Interfaces.ICurrentUserService currentUser,
+        IAuditLogger audit)
     {
         _db = db;
         _currentUser = currentUser;
+        _audit = audit;
     }
 
     public async Task<Result<int>> Handle(UpdateVoucherEntryCommand req, CancellationToken ct)
@@ -114,7 +120,7 @@ public class UpdateVoucherEntryHandler : IRequestHandler<UpdateVoucherEntryComma
             // ‎علامة "ترحيل فوري" وحفظ السند.
             if (entry.Status == JournalEntryStatus.Posted) entry.Unpost();
 
-            entry.UpdateBasic(req.EntryDate, req.Description, entry.EntryType, req.Currency, entry.VoucherTypeId);
+            entry.UpdateBasic(req.EntryDate, req.Description, entry.EntryType, req.Currency, entry.VoucherTypeId, req.ManualNumber);
             entry.ReplaceLines(req.Lines.Select(l =>
                 (l.AccountId, l.IsDebit, l.Amount, l.Description)).ToList());
 
@@ -122,6 +128,25 @@ public class UpdateVoucherEntryHandler : IRequestHandler<UpdateVoucherEntryComma
                 entry.Post(_currentUser.UserId?.ToString() ?? "system");
 
             await _db.SaveChangesAsync(ct);
+
+            await _audit.LogAsync(
+                entityType: "Voucher",
+                entityId: entry.Id.ToString(),
+                action: AuditActions.Update,
+                summary: $"تعديل سند رقم {entry.VoucherSequence ?? 0} — {entry.Description}",
+                details: new
+                {
+                    entry.EntryNumber,
+                    entry.VoucherTypeId,
+                    entry.VoucherSequence,
+                    entry.ManualNumber,
+                    entry.TotalDebit,
+                    entry.TotalCredit,
+                    entry.Currency,
+                    status = entry.Status.ToString(),
+                },
+                ct: ct);
+
             return Result.Success(entry.Id);
         }
         catch (UnbalancedJournalEntryException ex) { return Result.Failure<int>(ex.Message); }
@@ -163,7 +188,9 @@ public record DeleteVoucherEntryCommand(int Id) : IRequest<Result<bool>>;
 public class DeleteVoucherEntryHandler : IRequestHandler<DeleteVoucherEntryCommand, Result<bool>>
 {
     private readonly IAccountingDbContext _db;
-    public DeleteVoucherEntryHandler(IAccountingDbContext db) => _db = db;
+    private readonly IAuditLogger _audit;
+    public DeleteVoucherEntryHandler(IAccountingDbContext db, IAuditLogger audit)
+    { _db = db; _audit = audit; }
 
     public async Task<Result<bool>> Handle(DeleteVoucherEntryCommand req, CancellationToken ct)
     {
@@ -179,6 +206,15 @@ public class DeleteVoucherEntryHandler : IRequestHandler<DeleteVoucherEntryComma
         foreach (var line in entry.Lines) line.MarkAsDeleted();
 
         await _db.SaveChangesAsync(ct);
+
+        await _audit.LogAsync(
+            entityType: "Voucher",
+            entityId: entry.Id.ToString(),
+            action: AuditActions.Delete,
+            summary: $"حذف سند رقم {entry.VoucherSequence ?? 0} — {entry.Description}",
+            details: new { entry.EntryNumber, entry.VoucherTypeId, entry.VoucherSequence, entry.TotalDebit, entry.TotalCredit },
+            ct: ct);
+
         return Result.Success(true);
     }
 }

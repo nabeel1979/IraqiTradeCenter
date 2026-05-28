@@ -31,6 +31,7 @@ public class AccountingDbContext : DbContext, IAccountingDbContext
     public DbSet<CashBox> CashBoxes => Set<CashBox>();
     public DbSet<CashBoxCurrency> CashBoxCurrencies => Set<CashBoxCurrency>();
     public DbSet<CashBoxTransfer> CashBoxTransfers => Set<CashBoxTransfer>();
+    public DbSet<VoucherAttachment> VoucherAttachments => Set<VoucherAttachment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

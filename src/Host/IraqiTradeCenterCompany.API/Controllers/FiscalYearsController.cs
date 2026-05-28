@@ -54,14 +54,14 @@ public class FiscalYearsController : BaseApiController
         return Ok(new { success = true, data = dto });
     }
 
-    public record CreateFiscalYearBody(string Name, DateTime StartDate, DateTime EndDate);
+    public record CreateFiscalYearBody(string Name, DateTime StartDate, DateTime EndDate, string? NameEn = null);
 
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateFiscalYearBody body)
     {
         try
         {
-            var id = await Mediator.Send(new CreateFiscalYearCommand(body.Name, body.StartDate, body.EndDate));
+            var id = await Mediator.Send(new CreateFiscalYearCommand(body.Name, body.StartDate, body.EndDate, body.NameEn));
             return Ok(new { success = true, data = id, message = "تم إنشاء السنة المالية بنجاح" });
         }
         catch (DomainException ex)
@@ -80,14 +80,14 @@ public class FiscalYearsController : BaseApiController
         }
     }
 
-    public record UpdateFiscalYearBody(string Name, DateTime StartDate, DateTime EndDate);
+    public record UpdateFiscalYearBody(string Name, DateTime StartDate, DateTime EndDate, string? NameEn = null);
 
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, [FromBody] UpdateFiscalYearBody body)
     {
         try
         {
-            await Mediator.Send(new UpdateFiscalYearCommand(id, body.Name, body.StartDate, body.EndDate));
+            await Mediator.Send(new UpdateFiscalYearCommand(id, body.Name, body.StartDate, body.EndDate, body.NameEn));
             return Ok(new { success = true, message = "تم تحديث السنة المالية بنجاح" });
         }
         catch (DomainException ex)

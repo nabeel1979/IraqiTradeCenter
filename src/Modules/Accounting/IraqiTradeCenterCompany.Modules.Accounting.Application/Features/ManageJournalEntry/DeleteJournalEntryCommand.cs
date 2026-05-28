@@ -1,5 +1,6 @@
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Persistence;
 using IraqiTradeCenterCompany.Modules.Accounting.Domain.Enums;
+using IraqiTradeCenterCompany.SharedKernel.Interfaces;
 using IraqiTradeCenterCompany.SharedKernel.Models;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +12,9 @@ public record DeleteJournalEntryCommand(int Id) : IRequest<Result<bool>>;
 public class DeleteJournalEntryHandler : IRequestHandler<DeleteJournalEntryCommand, Result<bool>>
 {
     private readonly IAccountingDbContext _db;
-    public DeleteJournalEntryHandler(IAccountingDbContext db) => _db = db;
+    private readonly IAuditLogger _audit;
+    public DeleteJournalEntryHandler(IAccountingDbContext db, IAuditLogger audit)
+    { _db = db; _audit = audit; }
 
     public async Task<Result<bool>> Handle(DeleteJournalEntryCommand req, CancellationToken ct)
     {
@@ -59,6 +62,15 @@ public class DeleteJournalEntryHandler : IRequestHandler<DeleteJournalEntryComma
         foreach (var line in entry.Lines) line.MarkAsDeleted();
 
         await _db.SaveChangesAsync(ct);
+
+        await _audit.LogAsync(
+            entityType: entry.VoucherTypeId.HasValue ? "Voucher" : "JournalEntry",
+            entityId: entry.Id.ToString(),
+            action: AuditActions.Delete,
+            summary: $"حذف قيد رقم {entry.EntryNumber} — {entry.Description}",
+            details: new { entry.EntryNumber, entry.VoucherTypeId, entry.VoucherSequence, entry.TotalDebit, entry.TotalCredit },
+            ct: ct);
+
         return Result.Success(true);
     }
 }

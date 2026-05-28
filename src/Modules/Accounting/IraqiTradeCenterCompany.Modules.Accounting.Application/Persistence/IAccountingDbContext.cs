@@ -20,6 +20,7 @@ public interface IAccountingDbContext
     DbSet<CashBox> CashBoxes { get; }
     DbSet<CashBoxCurrency> CashBoxCurrencies { get; }
     DbSet<CashBoxTransfer> CashBoxTransfers { get; }
+    DbSet<VoucherAttachment> VoucherAttachments { get; }
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 
     /// <summary>

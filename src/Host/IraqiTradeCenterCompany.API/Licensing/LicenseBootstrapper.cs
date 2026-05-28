@@ -119,6 +119,35 @@ BEGIN
     );
 END", ct);
 
+        // ‎جدول جلسات الدفع بالبطاقة عبر QiCard (مستقلّ عن PaymentRequests).
+        // ‎كل صفّ يمثّل جلسة دفع واحدة من إنشائها إلى انتهائها (نجاح/فشل/انتهاء صلاحية).
+        await ExecAsync(cn, $@"
+IF OBJECT_ID(N'[{Schema}].[CardPayments]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [{Schema}].[CardPayments] (
+        [Id]              INT              IDENTITY(1,1) PRIMARY KEY,
+        [SessionId]       UNIQUEIDENTIFIER NOT NULL,            -- معرّفنا الداخلي (= requestId المُرسل إلى QiCard)
+        [QiCardPaymentId] NVARCHAR(64)     NULL,                -- المعرّف الذي تُرجعه QiCard
+        [FormUrl]         NVARCHAR(1024)   NULL,                -- صفحة الدفع التي يُفتحها المتصفّح
+        [Amount]          DECIMAL(18,3)    NOT NULL,
+        [Currency]        NVARCHAR(8)      NOT NULL DEFAULT N'IQD',
+        [Days]            INT              NOT NULL,
+        [Status]          NVARCHAR(32)     NOT NULL DEFAULT N'Created', -- Created/Pending/Success/Failed/Expired/Error/Canceled
+        [QiCardStatus]    NVARCHAR(32)     NULL,                -- آخر حالة خام من QiCard كما هي
+        [ErrorCode]       NVARCHAR(32)     NULL,
+        [ErrorMessage]    NVARCHAR(500)    NULL,
+        [WebhookRaw]      NVARCHAR(MAX)    NULL,                -- نسخة من جسم الـ webhook للتدقيق
+        [ActivationId]    INT              NULL,                -- معرّف صفّ التفعيل بعد النجاح (يربط CardPayments → LicenseActivations)
+        [CreatedAt]       DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+        [CreatedBy]       NVARCHAR(64)     NULL,
+        [CompletedAt]     DATETIME2        NULL
+    );
+    CREATE UNIQUE INDEX UX_CardPayments_SessionId
+        ON [{Schema}].[CardPayments]([SessionId]);
+    CREATE INDEX IX_CardPayments_QiCardPaymentId
+        ON [{Schema}].[CardPayments]([QiCardPaymentId]) WHERE [QiCardPaymentId] IS NOT NULL;
+END", ct);
+
         // ‎زرع صفّ الإعدادات إن لم يوجد — نزامن AuthKey/CompanyKey مع Parent.T_Subscribers
         var hasConfig = await ScalarAsync<int>(cn,
             $"SELECT COUNT(*) FROM [{Schema}].[LicenseConfig]", ct);

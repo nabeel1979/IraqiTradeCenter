@@ -60,7 +60,7 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<IVoucherTypePermissionsSync, VoucherTypePermissionsSync>();
 builder.Services.AddUnifiedTrash();
-builder.Services.AddSystemLicensing();
+builder.Services.AddSystemLicensing(builder.Configuration);
 
 // 3) MediatR Behaviors المشتركة
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
@@ -70,6 +70,27 @@ builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavi
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
+// ‎سجل المراقبة (Audit) — يكتب لـ auth.AuditLogs في كل عملية حسّاسة.
+builder.Services.AddScoped<IraqiTradeCenterCompany.SharedKernel.Interfaces.IAuditLogger,
+    IraqiTradeCenterCompany.API.Auth.Auditing.AuditLogger>();
+
+// ‎خدمة الإشعارات الداخلية — تُرسل إشعارات للمستخدمين عند أحداث المناقلات.
+builder.Services.AddScoped<IraqiTradeCenterCompany.SharedKernel.Interfaces.INotificationService,
+    IraqiTradeCenterCompany.API.Auth.Notifications.NotificationService>();
+
+// ‎أرشيف المرفقات (Attachments):
+//   • الإعدادات (المسار المحلي / مفاتيح R2 / الحد الأقصى للحجم) تُخزَّن في
+//     جدول auth.AttachmentStorageSettings وتُعدَّل من واجهة الإعدادات.
+//   • appsettings.json يُستعمل فقط كقيم افتراضية (Boot-strap قبل أول حفظ).
+//   • Registry يقدّم التطبيق المناسب بحسب اسم المزوّد المحفوظ على كل مرفق.
+builder.Services.Configure<IraqiTradeCenterCompany.API.Attachments.AttachmentStorageOptions>(
+    builder.Configuration.GetSection(IraqiTradeCenterCompany.API.Attachments.AttachmentStorageOptions.SectionName));
+builder.Services.AddScoped<IraqiTradeCenterCompany.API.Settings.IAttachmentSettingsService,
+    IraqiTradeCenterCompany.API.Settings.AttachmentSettingsService>();
+builder.Services.AddScoped<IraqiTradeCenterCompany.API.Attachments.LocalDiskAttachmentStorage>();
+builder.Services.AddScoped<IraqiTradeCenterCompany.API.Attachments.R2AttachmentStorage>();
+builder.Services.AddScoped<IraqiTradeCenterCompany.API.Attachments.IAttachmentStorageRegistry,
+    IraqiTradeCenterCompany.API.Attachments.AttachmentStorageRegistry>();
 
 // 5) Controllers
 builder.Services.AddControllers();
@@ -151,6 +172,10 @@ try
     // 1) Seed المحاسبي أولاً ليكون لدينا voucher types (إن وُجدت) قبل مزامنة الصلاحيات
     await ChartOfAccountsSeeder.SeedAsync(accountingDb);
     await FiscalYearSeeder.SeedAsync(accountingDb);
+
+    // 1.b) تعبئة NameEn لكل الحسابات/أنواع السندات/الصناديق التي أُدخلت
+    //      قبل دعم اللغة الإنجليزية — حتى تعمل واجهة EN بدون نصوص عربية متناثرة.
+    await NameEnBackfill.RunAsync(accountingDb);
 
     // 2) مزامنة الصلاحيات الديناميكية لأنواع السندات + هجرة legacy + Bootstrap كامل.
     //    تُنفّذ قبل AuthSeeder حتى يربط الـ seeder الأدوار الافتراضية بأكواد الصلاحيات

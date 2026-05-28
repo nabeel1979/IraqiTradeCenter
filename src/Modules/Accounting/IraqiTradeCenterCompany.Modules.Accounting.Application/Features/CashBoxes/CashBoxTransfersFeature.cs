@@ -319,15 +319,18 @@ public class CreateCashBoxTransferHandler : IRequestHandler<CreateCashBoxTransfe
     private readonly IAccountingDbContext _db;
     private readonly IPeriodResolver _periods;
     private readonly ICurrentUserService _currentUser;
+    private readonly INotificationService _notifications;
 
     public CreateCashBoxTransferHandler(
         IAccountingDbContext db,
         IPeriodResolver periods,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        INotificationService notifications)
     {
         _db = db;
         _periods = periods;
         _currentUser = currentUser;
+        _notifications = notifications;
     }
 
     public async Task<Result<int>> Handle(CreateCashBoxTransferCommand req, CancellationToken ct)
@@ -437,6 +440,19 @@ public class CreateCashBoxTransferHandler : IRequestHandler<CreateCashBoxTransfe
             await _db.SaveChangesAsync(ct);
 
             await tx.CommitAsync(ct);
+
+            // إشعار المستخدمين المرتبطين بالصندوق المستلم
+            var senderIdStr = _currentUser.UserId?.ToString() ?? "";
+            await _notifications.NotifyCashBoxUsersAsync(
+                cashBoxId: d.ToCashBoxId,
+                excludeUserId: senderIdStr,
+                title: "مناقلة واردة جديدة",
+                body: $"مناقلة {transfer.TransferNumber} من {fromBox.NameAr} بمبلغ {d.Amount:N0} {cur}",
+                link: "/accounting/cash-boxes?tab=transfers",
+                entityType: "CashBoxTransfer",
+                entityId: transfer.Id.ToString(),
+                ct: ct);
+
             return Result.Success(transfer.Id);
         }
         catch (DomainException ex) { return Result.Failure<int>(ex.Message); }
@@ -572,15 +588,18 @@ public class ReceiveCashBoxTransferHandler : IRequestHandler<ReceiveCashBoxTrans
     private readonly IAccountingDbContext _db;
     private readonly IPeriodResolver _periods;
     private readonly ICurrentUserService _currentUser;
+    private readonly INotificationService _notifications;
 
     public ReceiveCashBoxTransferHandler(
         IAccountingDbContext db,
         IPeriodResolver periods,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        INotificationService notifications)
     {
         _db = db;
         _periods = periods;
         _currentUser = currentUser;
+        _notifications = notifications;
     }
 
     public async Task<Result<int>> Handle(ReceiveCashBoxTransferCommand req, CancellationToken ct)
@@ -654,6 +673,19 @@ public class ReceiveCashBoxTransferHandler : IRequestHandler<ReceiveCashBoxTrans
 
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+
+            // إشعار المستخدمين المرتبطين بالصندوق المُرسِل
+            var receiverIdStr = _currentUser.UserId?.ToString() ?? "";
+            await _notifications.NotifyCashBoxUsersAsync(
+                cashBoxId: transfer.FromCashBoxId,
+                excludeUserId: receiverIdStr,
+                title: "تم استلام المناقلة",
+                body: $"تم استلام مناقلة {transfer.TransferNumber} في {transfer.ToCashBox?.NameAr ?? ""} بمبلغ {transfer.Amount:N0} {transfer.Currency}",
+                link: "/accounting/cash-boxes?tab=transfers",
+                entityType: "CashBoxTransfer",
+                entityId: transfer.Id.ToString(),
+                ct: ct);
+
             return Result.Success(recvEntry.Id);
         }
         catch (DomainException ex) { return Result.Failure<int>(ex.Message); }
@@ -751,15 +783,18 @@ public class CancelCashBoxTransferHandler : IRequestHandler<CancelCashBoxTransfe
     private readonly IAccountingDbContext _db;
     private readonly IPeriodResolver _periods;
     private readonly ICurrentUserService _currentUser;
+    private readonly INotificationService _notifications;
 
     public CancelCashBoxTransferHandler(
         IAccountingDbContext db,
         IPeriodResolver periods,
-        ICurrentUserService currentUser)
+        ICurrentUserService currentUser,
+        INotificationService notifications)
     {
         _db = db;
         _periods = periods;
         _currentUser = currentUser;
+        _notifications = notifications;
     }
 
     public async Task<Result<int>> Handle(CancelCashBoxTransferCommand req, CancellationToken ct)
@@ -821,6 +856,19 @@ public class CancelCashBoxTransferHandler : IRequestHandler<CancelCashBoxTransfe
 
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+
+            // إشعار المستخدمين المرتبطين بالصندوق المستلم بأن المناقلة أُلغيت
+            var cancellerIdStr = _currentUser.UserId?.ToString() ?? "";
+            await _notifications.NotifyCashBoxUsersAsync(
+                cashBoxId: transfer.ToCashBoxId,
+                excludeUserId: cancellerIdStr,
+                title: "تم إلغاء مناقلة",
+                body: $"مناقلة {transfer.TransferNumber} من {transfer.FromCashBox?.NameAr ?? ""} أُلغيت — {reason}",
+                link: "/accounting/cash-boxes?tab=transfers",
+                entityType: "CashBoxTransfer",
+                entityId: transfer.Id.ToString(),
+                ct: ct);
+
             return Result.Success(revEntry.Id);
         }
         catch (DomainException ex) { return Result.Failure<int>(ex.Message); }

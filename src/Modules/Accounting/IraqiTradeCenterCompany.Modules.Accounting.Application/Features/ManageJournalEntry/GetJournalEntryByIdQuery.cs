@@ -23,7 +23,7 @@ public class GetJournalEntryByIdHandler : IRequestHandler<GetJournalEntryByIdQue
         var accountIds = entry.Lines.Select(l => l.AccountId).Distinct().ToList();
         var accountNames = await _db.Accounts.AsNoTracking()
             .Where(a => accountIds.Contains(a.Id))
-            .ToDictionaryAsync(a => a.Id, a => new { a.Code, a.NameAr }, ct);
+            .ToDictionaryAsync(a => a.Id, a => new { a.Code, a.NameAr, a.NameEn }, ct);
 
         return new JournalEntryDto
         {
@@ -39,23 +39,31 @@ public class GetJournalEntryByIdHandler : IRequestHandler<GetJournalEntryByIdQue
             VoucherTypeId = entry.VoucherTypeId,
             VoucherTypeCode = entry.VoucherType?.Code,
             VoucherTypeName = entry.VoucherType?.NameAr,
+            VoucherTypeNameEn = entry.VoucherType?.NameEn,
             VoucherSequence = entry.VoucherSequence,
             VoucherNumber = (entry.VoucherSequence.HasValue && entry.VoucherType != null)
                 ? $"{entry.VoucherType.Code}-{entry.VoucherSequence.Value}"
                 : null,
+            ManualNumber = entry.ManualNumber,
             Source = entry.Source.ToString(),
             ReferenceType = entry.ReferenceType,
             ReferenceId = entry.ReferenceId,
             ReferenceNumber = entry.ReferenceNumber,
-            Lines = entry.Lines.Select(l => new JournalLineDto
+            Lines = entry.Lines.Select(l =>
             {
-                Id = l.Id,
-                AccountId = l.AccountId,
-                AccountName = accountNames.TryGetValue(l.AccountId, out var a)
-                    ? $"{a.Code} - {a.NameAr}" : null,
-                IsDebit = l.IsDebit,
-                Amount = l.Amount,
-                Description = l.Description
+                accountNames.TryGetValue(l.AccountId, out var a);
+                return new JournalLineDto
+                {
+                    Id = l.Id,
+                    AccountId = l.AccountId,
+                    // ‎للتوافق العكسي: نُبقي الصيغة "{Code} - {NameAr}" في AccountName.
+                    AccountName = a != null ? $"{a.Code} - {a.NameAr}" : null,
+                    AccountNameAr = a?.NameAr,
+                    AccountNameEn = a?.NameEn,
+                    IsDebit = l.IsDebit,
+                    Amount = l.Amount,
+                    Description = l.Description
+                };
             }).ToList()
         };
     }

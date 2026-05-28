@@ -16,7 +16,7 @@ public class FiscalYearTrashProvider : ITrashProvider
         var rows = await _db.FiscalYears.IgnoreQueryFilters().AsNoTracking()
             .Where(f => f.IsDeleted)
             .OrderByDescending(f => f.DeletedAt)
-            .Select(f => new { f.Id, f.Name, f.StartDate, f.EndDate, f.DeletedAt, f.UpdatedBy })
+            .Select(f => new { f.Id, f.Name, f.NameEn, f.StartDate, f.EndDate, f.DeletedAt, f.UpdatedBy })
             .ToListAsync(ct);
 
         return rows.Select(r => new TrashItemDto
@@ -26,7 +26,7 @@ public class FiscalYearTrashProvider : ITrashProvider
             Module = "المحاسبة",
             Icon = "CalendarRange",
             EntityId = r.Id,
-            DisplayName = r.Name,
+            DisplayName = string.IsNullOrWhiteSpace(r.NameEn) ? r.Name : $"{r.Name} / {r.NameEn}",
             SubInfo = $"{r.StartDate:yyyy/MM/dd} → {r.EndDate:yyyy/MM/dd}",
             DeletedAt = r.DeletedAt,
             DeletedBy = r.UpdatedBy,

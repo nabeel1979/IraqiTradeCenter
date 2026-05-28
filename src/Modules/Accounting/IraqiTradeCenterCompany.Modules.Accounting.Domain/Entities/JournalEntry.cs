@@ -23,6 +23,13 @@ public class JournalEntry : BaseEntity
     /// يبقى NULL للقيود اليدوية التي لا ترتبط بنوع سند.
     /// </summary>
     public int? VoucherSequence { get; private set; }
+    /// <summary>
+    /// رقم يدوي اختياري يُدخله المستخدم لربط القيد بمستند خارجي (شيك، إيصال
+    /// خارجي، فاتورة شريك، …). مستقل عن <c>EntryNumber</c> (المسلسل الداخلي)
+    /// و<c>VoucherSequence</c> (المسلسل لكل نوع سند) و<c>ReferenceNumber</c>
+    /// (مرجع نظامي يُولَّد من فاتورة/مناقلة). قابل للبحث في صفحة القيود.
+    /// </summary>
+    public string? ManualNumber { get; private set; }
     public string Currency { get; private set; } = "IQD";
     public string Description { get; private set; } = default!;
     public decimal TotalDebit { get; private set; }
@@ -41,7 +48,7 @@ public class JournalEntry : BaseEntity
                                        string description, string? refType = null, int? refId = null, string? refNumber = null,
                                        JournalEntryType type = JournalEntryType.Normal, string currency = "IQD",
                                        string? entryNumber = null, int? voucherTypeId = null,
-                                       int? voucherSequence = null)
+                                       int? voucherSequence = null, string? manualNumber = null)
     {
         if (string.IsNullOrWhiteSpace(entryNumber))
             throw new DomainException("رقم القيد مطلوب");
@@ -54,10 +61,30 @@ public class JournalEntry : BaseEntity
             EntryType = type,
             VoucherTypeId = voucherTypeId,
             VoucherSequence = voucherSequence,
+            ManualNumber = NormalizeManualNumber(manualNumber),
             Currency = string.IsNullOrWhiteSpace(currency) ? "IQD" : currency.Trim().ToUpperInvariant(),
             Description = string.IsNullOrWhiteSpace(description) ? "—" : description.Trim(),
             ReferenceType = refType, ReferenceId = refId, ReferenceNumber = refNumber
         };
+    }
+
+    /// <summary>
+    /// يطبّق التطبيع على الرقم اليدوي: trim + تحويل الفراغ → null. الحدّ الأعلى
+    /// المُطبَّق هنا تحفّظي (50)؛ EF Configuration يحدّد العمود بنفس الحدّ.
+    /// </summary>
+    private static string? NormalizeManualNumber(string? raw)
+    {
+        var s = raw?.Trim();
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        if (s.Length > 50) s = s[..50];
+        return s;
+    }
+
+    /// <summary>تحديث الرقم اليدوي فقط (يُسمح حتى للقيود المرحَّلة لأنه بيانات وصفية).</summary>
+    public void UpdateManualNumber(string? manualNumber)
+    {
+        if (Status == JournalEntryStatus.Reversed) throw new DomainException("لا يمكن تعديل قيد معكوس");
+        ManualNumber = NormalizeManualNumber(manualNumber);
     }
 
     public void AddDebit(int accountId, decimal amount, string? desc = null)
@@ -74,13 +101,15 @@ public class JournalEntry : BaseEntity
         Recalc();
     }
 
-    public void UpdateBasic(DateTime entryDate, string description, JournalEntryType type, string currency, int? voucherTypeId = null)
+    public void UpdateBasic(DateTime entryDate, string description, JournalEntryType type, string currency,
+                            int? voucherTypeId = null, string? manualNumber = null)
     {
         if (Status == JournalEntryStatus.Reversed) throw new DomainException("لا يمكن تعديل قيد معكوس");
         EntryDate = entryDate;
         Description = string.IsNullOrWhiteSpace(description) ? "—" : description.Trim();
         EntryType = type;
         VoucherTypeId = voucherTypeId;
+        ManualNumber = NormalizeManualNumber(manualNumber);
         Currency = string.IsNullOrWhiteSpace(currency) ? "IQD" : currency.Trim().ToUpperInvariant();
     }
 

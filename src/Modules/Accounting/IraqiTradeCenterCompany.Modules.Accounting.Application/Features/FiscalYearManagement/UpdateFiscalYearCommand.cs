@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace IraqiTradeCenterCompany.Modules.Accounting.Application.Features.FiscalYearManagement;
 
-public record UpdateFiscalYearCommand(int Id, string Name, DateTime StartDate, DateTime EndDate) : IRequest<Unit>;
+public record UpdateFiscalYearCommand(int Id, string Name, DateTime StartDate, DateTime EndDate, string? NameEn = null) : IRequest<Unit>;
 
 public class UpdateFiscalYearHandler : IRequestHandler<UpdateFiscalYearCommand, Unit>
 {
@@ -69,7 +69,7 @@ public class UpdateFiscalYearHandler : IRequestHandler<UpdateFiscalYearCommand, 
         }
 
         var datesChanged = fy.StartDate != req.StartDate || fy.EndDate != req.EndDate;
-        fy.Update(req.Name, req.StartDate, req.EndDate);
+        fy.Update(req.Name, req.StartDate, req.EndDate, req.NameEn);
 
         if (datesChanged)
         {

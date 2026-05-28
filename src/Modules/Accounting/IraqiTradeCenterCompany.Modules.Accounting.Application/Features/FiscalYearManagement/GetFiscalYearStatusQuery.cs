@@ -46,6 +46,7 @@ public class GetFiscalYearStatusHandler : IRequestHandler<GetFiscalYearStatusQue
         {
             FiscalYearId = fy.Id,
             FiscalYearName = fy.Name,
+            FiscalYearNameEn = fy.NameEn,
             StartDate = fy.StartDate,
             EndDate = fy.EndDate,
             IsClosed = fy.IsClosed,

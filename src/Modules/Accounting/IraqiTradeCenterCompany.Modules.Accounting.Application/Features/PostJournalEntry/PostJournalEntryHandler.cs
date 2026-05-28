@@ -16,10 +16,12 @@ public class PostJournalEntryHandler : IRequestHandler<PostJournalEntryCommand, 
     private readonly IAccountingDbContext _db;
     private readonly IPeriodResolver _periods;
     private readonly ICurrentUserService _currentUser;
+    private readonly IAuditLogger _audit;
 
-    public PostJournalEntryHandler(IAccountingDbContext db, IPeriodResolver periods, ICurrentUserService currentUser)
+    public PostJournalEntryHandler(IAccountingDbContext db, IPeriodResolver periods,
+        ICurrentUserService currentUser, IAuditLogger audit)
     {
-        _db = db; _periods = periods; _currentUser = currentUser;
+        _db = db; _periods = periods; _currentUser = currentUser; _audit = audit;
     }
 
     public async Task<Result<int>> Handle(PostJournalEntryCommand request, CancellationToken ct)
@@ -79,7 +81,8 @@ public class PostJournalEntryHandler : IRequestHandler<PostJournalEntryCommand, 
                 JournalEntrySource.Manual, request.Description,
                 type: request.EntryType, currency: request.Currency,
                 entryNumber: entryNumber, voucherTypeId: request.VoucherTypeId,
-                voucherSequence: voucherSeq);
+                voucherSequence: voucherSeq,
+                manualNumber: request.ManualNumber);
 
             foreach (var l in request.Lines)
             {
@@ -101,6 +104,31 @@ public class PostJournalEntryHandler : IRequestHandler<PostJournalEntryCommand, 
             await _db.JournalEntries.AddAsync(entry, ct);
             await _db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
+
+            // ‎سجل المراقبة: إنشاء قيد/سند. نوع الكيان يميّز السندات المخصّصة عن
+            // ‎القيود اليومية لتسهيل الفلترة في واجهة المراقبة.
+            var auditEntityType = entry.VoucherTypeId.HasValue ? "Voucher" : "JournalEntry";
+            var auditSummary = entry.VoucherTypeId.HasValue && entry.VoucherSequence.HasValue
+                ? $"إنشاء سند تسلسل {entry.VoucherSequence} — {entry.Description}"
+                : $"إنشاء قيد رقم {entry.EntryNumber} — {entry.Description}";
+            await _audit.LogAsync(
+                entityType: auditEntityType,
+                entityId: entry.Id.ToString(),
+                action: AuditActions.Create,
+                summary: auditSummary,
+                details: new
+                {
+                    entryNumber = entry.EntryNumber,
+                    voucherTypeId = entry.VoucherTypeId,
+                    voucherSequence = entry.VoucherSequence,
+                    manualNumber = entry.ManualNumber,
+                    totalDebit = entry.TotalDebit,
+                    totalCredit = entry.TotalCredit,
+                    currency = entry.Currency,
+                    status = entry.Status.ToString(),
+                },
+                ct: ct);
+
             return Result.Success(entry.Id);
         }
         catch (UnbalancedJournalEntryException ex) { return Result.Failure<int>(ex.Message); }

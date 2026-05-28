@@ -547,6 +547,10 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("NameEn")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("datetime2");
 
@@ -615,6 +619,10 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
+                    b.Property<string>("ManualNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTime?>("PostedAt")
                         .HasColumnType("datetime2");
 
@@ -663,6 +671,9 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                     b.HasKey("Id");
 
                     b.HasIndex("EntryDate");
+
+                    b.HasIndex("ManualNumber")
+                        .HasFilter("[ManualNumber] IS NOT NULL");
 
                     b.HasIndex("Status");
 
@@ -821,6 +832,91 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                     b.ToTable("JournalVoucherTypes", "acc");
                 });
 
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.VoucherAttachment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("JournalEntryId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("nvarchar(260)");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("StorageProvider")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("UploadedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("UploadedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UploadedByUserName")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted");
+
+                    b.HasIndex("UploadedByUserId");
+
+                    b.HasIndex("JournalEntryId", "UploadedAtUtc");
+
+                    b.ToTable("VoucherAttachments", "acc");
+                });
+
             modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.Account", b =>
                 {
                     b.HasOne("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.Account", "Parent")
@@ -954,6 +1050,17 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Infrastructure.Persistence.
                     b.Navigation("DefaultCreditAccount");
 
                     b.Navigation("DefaultDebitAccount");
+                });
+
+            modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.VoucherAttachment", b =>
+                {
+                    b.HasOne("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.JournalEntry", "JournalEntry")
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("JournalEntry");
                 });
 
             modelBuilder.Entity("IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities.Account", b =>

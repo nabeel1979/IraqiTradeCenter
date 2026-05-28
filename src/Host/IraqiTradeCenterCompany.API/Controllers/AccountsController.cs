@@ -1,8 +1,11 @@
 using IraqiTradeCenterCompany.API.Auth;
+using IraqiTradeCenterCompany.API.Auth.Permissions;
+using IraqiTradeCenterCompany.SharedKernel.Interfaces;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.GetAccountStatement;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.GetAccountsTrash;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.GetAccountsTree;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.GetJournalEntriesList;
+using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.GetAccountBalances;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.GetTrialBalance;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.ManageAccounts;
 using IraqiTradeCenterCompany.Modules.Accounting.Application.Features.ManageJournalEntry;
@@ -15,10 +18,28 @@ namespace IraqiTradeCenterCompany.API.Controllers;
 public class AccountsController : BaseApiController
 {
     private readonly AuthDbContext _authDb;
+    private readonly IPermissionService _permissions;
+    private readonly ICurrentUserService _currentUser;
 
-    public AccountsController(AuthDbContext authDb)
+    public AccountsController(AuthDbContext authDb, IPermissionService permissions, ICurrentUserService currentUser)
     {
         _authDb = authDb;
+        _permissions = permissions;
+        _currentUser = currentUser;
+    }
+
+    /// <summary>
+    /// يُعيد قائمة معرّفات الصناديق المسموحة للمستخدم الحالي إن وَجَب تطبيق
+    /// فلتر تقارير الصناديق، أو <c>null</c> لتجاوز الفلتر (SuperAdmin أو من
+    /// لديه <c>Accounting.CashBoxes.ViewAll</c>).
+    /// </summary>
+    private async Task<IReadOnlyCollection<int>?> ResolveCashBoxScopeAsync(CancellationToken ct)
+    {
+        if (_currentUser.IsSuperAdmin) return null;
+        var uid = _currentUser.UserId;
+        if (uid is null) return null; // anonymous — تُلتقط بطبقة المصادقة قبل أن نصل هنا
+        if (_currentUser.HasPermission(PermissionRegistry.Accounting.CashBoxes.ViewAll)) return null;
+        return await _permissions.GetUserCashBoxIdsAsync(uid.Value, ct);
     }
 
     [HttpGet("tree")]
@@ -78,10 +99,12 @@ public class AccountsController : BaseApiController
         [FromQuery] string? status = null, [FromQuery] string? search = null,
         [FromQuery] DateTime? fromDate = null, [FromQuery] DateTime? toDate = null,
         [FromQuery] int? voucherTypeId = null,
-        [FromQuery] bool excludeSidebarVoucherTypes = false)
+        [FromQuery] bool excludeSidebarVoucherTypes = false,
+        CancellationToken ct = default)
     {
+        var allowed = await ResolveCashBoxScopeAsync(ct);
         var data = await Mediator.Send(new GetJournalEntriesListQuery(
-            pageNumber, pageSize, status, search, fromDate, toDate, voucherTypeId, excludeSidebarVoucherTypes));
+            pageNumber, pageSize, status, search, fromDate, toDate, voucherTypeId, excludeSidebarVoucherTypes, allowed), ct);
         return Ok(new { success = true, data });
     }
 
@@ -122,6 +145,22 @@ public class AccountsController : BaseApiController
     [HttpDelete("vouchers/{id:int}")]
     public async Task<IActionResult> DeleteVoucherEntry(int id)
         => HandleResult(await Mediator.Send(new DeleteVoucherEntryCommand(id)));
+
+    [HttpGet("balances")]
+    public async Task<IActionResult> GetAccountBalances(
+        [FromQuery] DateTime from,
+        [FromQuery] DateTime to,
+        [FromQuery] int? accountId = null,
+        [FromQuery] string? currency = null,
+        [FromQuery] bool valuated = false,
+        [FromQuery] int? maxLevel = null,
+        [FromQuery] bool leavesOnly = true,
+        [FromQuery] bool includeDraft = false)
+    {
+        var data = await Mediator.Send(new GetAccountBalancesQuery(
+            from, to, accountId, currency, valuated, maxLevel, leavesOnly, includeDraft));
+        return Ok(new { success = true, data });
+    }
 
     [HttpGet("trial-balance")]
     public async Task<IActionResult> GetTrialBalance(

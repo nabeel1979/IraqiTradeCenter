@@ -18,7 +18,9 @@ public record UpdateJournalEntryCommand(
     string Currency,
     List<UpdateJournalLine> Lines,
     bool PostImmediately = true,
-    int? VoucherTypeId = null
+    int? VoucherTypeId = null,
+    /// <summary>الرقم اليدوي — يُحفظ كما هو ويُستخدم في البحث.</summary>
+    string? ManualNumber = null
 ) : IRequest<Result<int>>;
 
 public record UpdateJournalLine(int AccountId, bool IsDebit, decimal Amount, string? Description);
@@ -27,12 +29,15 @@ public class UpdateJournalEntryHandler : IRequestHandler<UpdateJournalEntryComma
 {
     private readonly IAccountingDbContext _db;
     private readonly IraqiTradeCenterCompany.SharedKernel.Interfaces.ICurrentUserService _currentUser;
+    private readonly IraqiTradeCenterCompany.SharedKernel.Interfaces.IAuditLogger _audit;
 
     public UpdateJournalEntryHandler(IAccountingDbContext db,
-        IraqiTradeCenterCompany.SharedKernel.Interfaces.ICurrentUserService currentUser)
+        IraqiTradeCenterCompany.SharedKernel.Interfaces.ICurrentUserService currentUser,
+        IraqiTradeCenterCompany.SharedKernel.Interfaces.IAuditLogger audit)
     {
         _db = db;
         _currentUser = currentUser;
+        _audit = audit;
     }
 
     public async Task<Result<int>> Handle(UpdateJournalEntryCommand req, CancellationToken ct)
@@ -134,7 +139,7 @@ public class UpdateJournalEntryHandler : IRequestHandler<UpdateJournalEntryComma
             // إلغاء علامة "ترحيل فوري" أثناء التعديل.
             if (entry.Status == JournalEntryStatus.Posted) entry.Unpost();
 
-            entry.UpdateBasic(req.EntryDate, req.Description, req.EntryType, req.Currency, req.VoucherTypeId);
+            entry.UpdateBasic(req.EntryDate, req.Description, req.EntryType, req.Currency, req.VoucherTypeId, req.ManualNumber);
             entry.ReplaceLines(req.Lines.Select(l =>
                 (l.AccountId, l.IsDebit, l.Amount, l.Description)).ToList());
 
@@ -142,6 +147,30 @@ public class UpdateJournalEntryHandler : IRequestHandler<UpdateJournalEntryComma
                 entry.Post(_currentUser.UserId?.ToString() ?? "system");
 
             await _db.SaveChangesAsync(ct);
+
+            // ‎سجل المراقبة: تعديل قيد/سند. التفريق بين الكيانين مفيد للفلترة لاحقاً.
+            var auditEntityType = entry.VoucherTypeId.HasValue ? "Voucher" : "JournalEntry";
+            var auditSummary = entry.VoucherTypeId.HasValue && entry.VoucherSequence.HasValue
+                ? $"تعديل سند تسلسل {entry.VoucherSequence} — {entry.Description}"
+                : $"تعديل قيد رقم {entry.EntryNumber} — {entry.Description}";
+            await _audit.LogAsync(
+                entityType: auditEntityType,
+                entityId: entry.Id.ToString(),
+                action: IraqiTradeCenterCompany.SharedKernel.Interfaces.AuditActions.Update,
+                summary: auditSummary,
+                details: new
+                {
+                    entry.EntryNumber,
+                    entry.VoucherTypeId,
+                    entry.VoucherSequence,
+                    entry.ManualNumber,
+                    entry.TotalDebit,
+                    entry.TotalCredit,
+                    entry.Currency,
+                    status = entry.Status.ToString(),
+                },
+                ct: ct);
+
             return Result.Success(entry.Id);
         }
         catch (UnbalancedJournalEntryException ex) { return Result.Failure<int>(ex.Message); }

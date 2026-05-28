@@ -4,6 +4,8 @@ public class FiscalYearDto
 {
     public int Id { get; set; }
     public string Name { get; set; } = default!;
+    /// <summary>الاسم الإنجليزي الاختياري — يُعرض في الواجهة الإنجليزية.</summary>
+    public string? NameEn { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
     public bool IsClosed { get; set; }
@@ -28,6 +30,7 @@ public class FiscalYearStatusDto
 {
     public int FiscalYearId { get; set; }
     public string FiscalYearName { get; set; } = default!;
+    public string? FiscalYearNameEn { get; set; }
     public DateTime StartDate { get; set; }
     public DateTime EndDate { get; set; }
     public bool IsClosed { get; set; }

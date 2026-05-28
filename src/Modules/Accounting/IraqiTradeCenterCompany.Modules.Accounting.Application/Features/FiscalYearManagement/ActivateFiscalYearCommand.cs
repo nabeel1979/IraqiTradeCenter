@@ -57,6 +57,7 @@ public class GetActiveFiscalYearHandler : IRequestHandler<GetActiveFiscalYearQue
         {
             Id = fy.Id,
             Name = fy.Name,
+            NameEn = fy.NameEn,
             StartDate = fy.StartDate,
             EndDate = fy.EndDate,
             IsClosed = fy.IsClosed,

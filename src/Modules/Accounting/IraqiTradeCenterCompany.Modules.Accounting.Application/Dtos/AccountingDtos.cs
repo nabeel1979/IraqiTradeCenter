@@ -7,6 +7,7 @@ public class AccountDto
     public int Id { get; set; }
     public string Code { get; set; } = default!;
     public string NameAr { get; set; } = default!;
+    public string? NameEn { get; set; }
     public AccountType Type { get; set; }
     public AccountNature Nature { get; set; }
     public int? ParentId { get; set; }
@@ -64,10 +65,17 @@ public class JournalEntryDto
     public int? VoucherTypeId { get; set; }
     public string? VoucherTypeCode { get; set; }
     public string? VoucherTypeName { get; set; }
+    /// <summary>اسم نوع السند بالإنجليزية (اختياري). يستخدمه العميل لعرضه عند تفعيل لغة الواجهة الإنجليزية.</summary>
+    public string? VoucherTypeNameEn { get; set; }
     /// <summary>التسلسل الخاص بنوع السند (يبدأ من 1 لكل نوع)</summary>
     public int? VoucherSequence { get; set; }
     /// <summary>رقم السند المُهيّأ للعرض: "{Code}-{Sequence}" مثل "PV-1"</summary>
     public string? VoucherNumber { get; set; }
+    /// <summary>
+    /// رقم يدوي اختياري يدخله المستخدم (شيك / إيصال خارجي / فاتورة شريك …).
+    /// قابل للبحث في صفحة القيود/السندات.
+    /// </summary>
+    public string? ManualNumber { get; set; }
     /// <summary>مصدر القيد: Manual / SalesInvoice / PurchaseInvoice / Payment / Receipt / …</summary>
     public string Source { get; set; } = "Manual";
     /// <summary>المرجع المصدر (للقيود المولّدة من فواتير أو حركات أخرى)</summary>
@@ -81,7 +89,12 @@ public class JournalLineDto
 {
     public int Id { get; set; }
     public int AccountId { get; set; }
+    /// <summary>اسم الحساب الافتراضي (عربي تاريخياً). يبقى مدعوماً للتوافق العكسي.</summary>
     public string? AccountName { get; set; }
+    /// <summary>اسم الحساب بالعربية — مصدر دقيق لا يتأثر بـ AutoMapper أو منطق العرض.</summary>
+    public string? AccountNameAr { get; set; }
+    /// <summary>اسم الحساب بالإنجليزية إن وُجد. يُستخدم لعرض القيود في الواجهة الإنجليزية.</summary>
+    public string? AccountNameEn { get; set; }
     public bool IsDebit { get; set; }
     public decimal Amount { get; set; }
     public string? Description { get; set; }
@@ -159,6 +172,59 @@ public class TrialBalanceDto
     public decimal TotalExpense { get; set; }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// تقرير أرصدة الحسابات (Account Balances)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>صف واحد في تقرير أرصدة الحسابات (حساب × عملة)</summary>
+public class AccountBalanceRowDto
+{
+    public int AccountId { get; set; }
+    public string AccountCode { get; set; } = default!;
+    public string AccountName { get; set; } = default!;
+    public string AccountType { get; set; } = default!;
+    public string AccountNature { get; set; } = default!;
+    public int Level { get; set; }
+    public bool IsLeaf { get; set; }
+    public int? ParentId { get; set; }
+
+    /// <summary>العملة الأصلية لهذا الصف</summary>
+    public string Currency { get; set; } = default!;
+
+    /// <summary>رصيد مدين بالعملة الأصلية</summary>
+    public decimal DebitBalance { get; set; }
+
+    /// <summary>رصيد دائن بالعملة الأصلية</summary>
+    public decimal CreditBalance { get; set; }
+
+    /// <summary>رصيد مقوَّم بالعملة الأساسية (양양 عند Valuated=true فقط)</summary>
+    public decimal ValuatedDebit { get; set; }
+    public decimal ValuatedCredit { get; set; }
+}
+
+/// <summary>نتيجة تقرير أرصدة الحسابات</summary>
+public class AccountBalancesDto
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public string? FilterCurrency { get; set; }
+    public int? FilterAccountId { get; set; }
+    public bool Valuated { get; set; }
+    public string BaseCurrency { get; set; } = "IQD";
+    public string? FxBulletinName { get; set; }
+    public DateTime? FxBulletinEffectiveAt { get; set; }
+    public bool FxUsedFallback { get; set; }
+    public int? MaxLevel { get; set; }
+    public bool LeavesOnly { get; set; }
+
+    public List<AccountBalanceRowDto> Rows { get; set; } = new();
+
+    public decimal TotalDebit { get; set; }
+    public decimal TotalCredit { get; set; }
+    public decimal TotalValuatedDebit { get; set; }
+    public decimal TotalValuatedCredit { get; set; }
+}
+
 /// <summary>
 /// سطر في كشف الحساب
 /// </summary>
@@ -196,6 +262,8 @@ public class AccountStatementRowDto
     public string? VoucherTypeCode { get; set; }
     /// <summary>التسلسل ضمن نوع السند (يبدأ من 1 لكل نوع)</summary>
     public int? VoucherSequence { get; set; }
+    /// <summary>الرقم اليدوي الذي يدخله المستخدم — يظهر بجانب رقم السند.</summary>
+    public string? ManualNumber { get; set; }
 }
 
 /// <summary>

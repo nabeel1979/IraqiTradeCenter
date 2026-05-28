@@ -21,11 +21,15 @@ public class JournalEntryConfig : IEntityTypeConfiguration<JournalEntry>
         b.Property(x => x.ReferenceType).HasMaxLength(50);
         b.Property(x => x.ReferenceNumber).HasMaxLength(100);
         b.Property(x => x.PostedBy).HasMaxLength(100);
+        b.Property(x => x.ManualNumber).HasMaxLength(50);
         b.HasIndex(x => new { x.FiscalYearId, x.EntryNumber }).IsUnique();
         b.HasIndex(x => x.EntryDate);
         b.HasIndex(x => x.Status);
         b.HasIndex(x => new { x.ReferenceType, x.ReferenceId });
         b.HasIndex(x => x.VoucherTypeId);
+        // ‎فهرس للبحث السريع بالرقم اليدوي — مرشّح لاستبعاد القيم NULL.
+        b.HasIndex(x => x.ManualNumber)
+            .HasFilter("[ManualNumber] IS NOT NULL");
         // Unique sequence per voucher type (only when VoucherTypeId & VoucherSequence are not null)
         b.HasIndex(x => new { x.VoucherTypeId, x.VoucherSequence })
             .HasFilter("[VoucherTypeId] IS NOT NULL AND [VoucherSequence] IS NOT NULL")

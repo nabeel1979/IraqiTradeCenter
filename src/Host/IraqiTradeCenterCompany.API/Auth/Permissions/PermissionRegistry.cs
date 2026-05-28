@@ -40,6 +40,7 @@ public static class PermissionRegistry
         public const string Apply    = "Apply";    // تطبيق شفرة ترخيص
         public const string Generate = "Generate"; // توليد شفرة ترخيص
         public const string Topup    = "Topup";    // شحن المحفظة
+        public const string ViewAll  = "ViewAll";  // تجاوز فلترة الصناديق المسموحة (يرى كل الصناديق/السندات)
     }
 
     public static readonly Dictionary<string, string> ActionLabelsAr = new()
@@ -58,6 +59,7 @@ public static class PermissionRegistry
         [Actions.Apply]    = "تطبيق",
         [Actions.Generate] = "توليد",
         [Actions.Topup]    = "شحن",
+        [Actions.ViewAll]  = "عرض جميع",
     };
 
     public static readonly Dictionary<string, string> ModuleLabelsAr = new()
@@ -111,10 +113,16 @@ public static class PermissionRegistry
         }
         public static class CashBoxes
         {
-            public const string Read   = "Accounting.CashBoxes.Read";
-            public const string Create = "Accounting.CashBoxes.Create";
-            public const string Update = "Accounting.CashBoxes.Update";
-            public const string Delete = "Accounting.CashBoxes.Delete";
+            public const string Read    = "Accounting.CashBoxes.Read";
+            public const string Create  = "Accounting.CashBoxes.Create";
+            public const string Update  = "Accounting.CashBoxes.Update";
+            public const string Delete  = "Accounting.CashBoxes.Delete";
+            /// <summary>
+            /// تجاوز فلترة الصناديق المسموحة — يسمح للمستخدم برؤية جميع
+            /// السندات/الأرصدة/المناقلات بغضّ النظر عن الصناديق المخصّصة له.
+            /// (مفيدة للمدراء والمحاسبين الذين لا يرتبطون بصندوق محدّد.)
+            /// </summary>
+            public const string ViewAll = "Accounting.CashBoxes.ViewAll";
         }
         public static class CashBoxBalances
         {
@@ -256,6 +264,15 @@ public static class PermissionRegistry
             public const string Read  = "System.Wallet.Read";
             public const string Topup = "System.Wallet.Topup";
         }
+        /// <summary>
+        /// سجل المراقبة (Audit Log) — يعرض تاريخ كل عملية حسّاسة في النظام.
+        /// قراءته حسّاسة (يكشف نشاط المستخدمين الآخرين)، فلا يمنح إلا للمدراء.
+        /// </summary>
+        public static class Audit
+        {
+            public const string Read  = "System.Audit.Read";
+            public const string Export = "System.Audit.Export";
+        }
     }
 
     // ────────────────────────────────────────────────────────────
@@ -284,7 +301,7 @@ public static class PermissionRegistry
         // ‎مورد صلاحيات منفصل كي يمكن منح المحاسب الاطلاع على الأرصدة فقط، أو
         // ‎منح أمين الصندوق صلاحية الاستلام دون الحذف، …إلخ.
         foreach (var p in Resource(Modules.Accounting, "CashBoxes", "الصناديق", order: 16,
-            Actions.Read, Actions.Create, Actions.Update, Actions.Delete)) yield return p;
+            Actions.Read, Actions.Create, Actions.Update, Actions.Delete, Actions.ViewAll)) yield return p;
 
         foreach (var p in Resource(Modules.Accounting, "CashBoxBalances", "أرصدة الصناديق", order: 165,
             Actions.Read, Actions.Print)) yield return p;
@@ -344,6 +361,11 @@ public static class PermissionRegistry
         // ‎المحفظة المالية للشركة — تُستخدم لشراء التراخيص.
         foreach (var p in Resource(Modules.System, "Wallet", "محفظة الشركة", order: 46,
             Actions.Read, Actions.Topup)) yield return p;
+
+        // ‎سجل المراقبة (Audit) — يعرض تاريخ كل عملية حسّاسة (إضافة/تعديل/حذف/طباعة).
+        // ‎القراءة فقط (مع تصدير)؛ لا يوجد تعديل/حذف لأن السجل append-only.
+        foreach (var p in Resource(Modules.System, "Audit", "سجل المراقبة", order: 47,
+            Actions.Read, Actions.Export)) yield return p;
     }
 
     private static IEnumerable<Permission> Resource(string module, string resource, string nameAr, int order, params string[] actions)

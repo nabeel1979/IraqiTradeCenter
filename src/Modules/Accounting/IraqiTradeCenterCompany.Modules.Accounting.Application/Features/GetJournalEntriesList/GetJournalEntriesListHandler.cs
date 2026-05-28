@@ -22,7 +22,29 @@ public class GetJournalEntriesListHandler : IRequestHandler<GetJournalEntriesLis
         if (!string.IsNullOrWhiteSpace(req.SearchTerm))
         {
             var t = req.SearchTerm.Trim();
-            q = q.Where(e => e.EntryNumber.Contains(t) || e.Description.Contains(t));
+            // ‎البحث يطابق:
+            //   - رقم القيد الداخلي (EntryNumber)
+            //   - البيان/الوصف
+            //   - الرقم اليدوي الذي أدخله المستخدم (ManualNumber)
+            //   - رقم السند الظاهر (مثل "PV-7"): نقسّمه إلى Code + Sequence
+            //     لتجاوز قيود LINQ-to-SQL على عمليات النصوص المركّبة.
+            string? voucherCode = null;
+            int? voucherSeq = null;
+            var dashIdx = t.IndexOf('-');
+            if (dashIdx > 0 && dashIdx < t.Length - 1
+                && int.TryParse(t[(dashIdx + 1)..], out var seq))
+            {
+                voucherCode = t[..dashIdx];
+                voucherSeq = seq;
+            }
+            q = q.Where(e =>
+                e.EntryNumber.Contains(t)
+                || e.Description.Contains(t)
+                || (e.ManualNumber != null && e.ManualNumber.Contains(t))
+                || (voucherCode != null && voucherSeq != null
+                    && e.VoucherType != null
+                    && e.VoucherType.Code == voucherCode
+                    && e.VoucherSequence == voucherSeq));
         }
         if (!string.IsNullOrWhiteSpace(req.Status) &&
             Enum.TryParse<JournalEntryStatus>(req.Status, true, out var s))
@@ -50,16 +72,50 @@ public class GetJournalEntriesListHandler : IRequestHandler<GetJournalEntriesLis
                           || (e.VoucherType != null && !e.VoucherType.ShowInSidebar));
         }
 
+        // ─────────────────────────────────────────────────────────────────
+        // فلتر صلاحيات الصناديق:
+        // إذا مُرِّرت قائمة صناديق مسموحة، نُظهِر فقط القيود التي تتضمّن سطراً
+        // مربوطاً بأحد هذه الصناديق (المعرَّفة بـ JournalEntryLine.AccountId
+        // == CashBox.AccountId). القيود التي لا تتضمّن أي حساب صندوق
+        // (مثل قيود محاسبية عامة بين حسابات غير صناديق) تُستبعد أيضاً —
+        // المستخدم المقيَّد بصناديق محددة يرى فقط حركات صناديقه.
+        //
+        // قائمة فارغة = المستخدم بلا صناديق مسموحة → لن يرى شيئاً (بدلاً من
+        // كل شيء بالخطأ).
+        // ─────────────────────────────────────────────────────────────────
+        if (req.AllowedCashBoxIds is not null)
+        {
+            if (req.AllowedCashBoxIds.Count == 0)
+            {
+                // لا صناديق مسموحة — نتيجة فارغة فوراً.
+                return new PagedResult<JournalEntryDto>
+                {
+                    Items = new List<JournalEntryDto>(),
+                    TotalCount = 0,
+                    PageNumber = req.PageNumber,
+                    PageSize = req.PageSize,
+                };
+            }
+            var allowedIds = req.AllowedCashBoxIds.ToList();
+            var cbAccountIds = await _db.CashBoxes.AsNoTracking()
+                .Where(b => allowedIds.Contains(b.Id))
+                .Select(b => b.AccountId)
+                .ToListAsync(ct);
+            q = q.Where(e => e.Lines.Any(l => cbAccountIds.Contains(l.AccountId)));
+        }
+
         var total = await q.CountAsync(ct);
         var entries = await q.OrderByDescending(e => e.EntryDate).ThenByDescending(e => e.Id)
             .Skip((req.PageNumber - 1) * req.PageSize).Take(req.PageSize)
             .ToListAsync(ct);
 
-        // جلب أسماء الحسابات لجميع الأسطر
+        // ‎جلب أسماء الحسابات لجميع الأسطر — نُرسل العربي والإنجليزي معاً ليختار
+        // ‎العميل ما يناسب اللغة النشطة دون استدعاء إضافي.
         var accountIds = entries.SelectMany(e => e.Lines).Select(l => l.AccountId).Distinct().ToList();
         var accountNames = await _db.Accounts.AsNoTracking()
             .Where(a => accountIds.Contains(a.Id))
-            .ToDictionaryAsync(a => a.Id, a => a.NameAr, ct);
+            .Select(a => new { a.Id, a.NameAr, a.NameEn })
+            .ToDictionaryAsync(a => a.Id, a => new { a.NameAr, a.NameEn }, ct);
 
         var dtos = entries.Select(e => new JournalEntryDto
         {
@@ -75,22 +131,30 @@ public class GetJournalEntriesListHandler : IRequestHandler<GetJournalEntriesLis
             VoucherTypeId = e.VoucherTypeId,
             VoucherTypeCode = e.VoucherType?.Code,
             VoucherTypeName = e.VoucherType?.NameAr,
+            VoucherTypeNameEn = e.VoucherType?.NameEn,
             VoucherSequence = e.VoucherSequence,
             VoucherNumber = (e.VoucherSequence.HasValue && e.VoucherType != null)
                 ? $"{e.VoucherType.Code}-{e.VoucherSequence.Value}"
                 : null,
+            ManualNumber = e.ManualNumber,
             Source = e.Source.ToString(),
             ReferenceType = e.ReferenceType,
             ReferenceId = e.ReferenceId,
             ReferenceNumber = e.ReferenceNumber,
-            Lines = e.Lines.Select(l => new JournalLineDto
+            Lines = e.Lines.Select(l =>
             {
-                Id = l.Id,
-                AccountId = l.AccountId,
-                AccountName = accountNames.GetValueOrDefault(l.AccountId),
-                IsDebit = l.IsDebit,
-                Amount = l.Amount,
-                Description = l.Description
+                var n = accountNames.GetValueOrDefault(l.AccountId);
+                return new JournalLineDto
+                {
+                    Id = l.Id,
+                    AccountId = l.AccountId,
+                    AccountName = n?.NameAr,
+                    AccountNameAr = n?.NameAr,
+                    AccountNameEn = n?.NameEn,
+                    IsDebit = l.IsDebit,
+                    Amount = l.Amount,
+                    Description = l.Description
+                };
             }).ToList()
         }).ToList();
 

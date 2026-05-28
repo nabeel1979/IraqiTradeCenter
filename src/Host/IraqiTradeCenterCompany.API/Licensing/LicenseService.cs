@@ -59,10 +59,18 @@ public interface ILicenseService
     Task<string> GenerateAsync(int days, CancellationToken ct);
 
     /// <summary>
-    /// (اختبار فقط) يضع <c>EndDate</c> لآخر تفعيل في الماضي القريب فيدخل النظام
-    /// وضع "قراءة فقط". يُعيد توقيع السلسلة كاملةً ليبقى التحقّق متّسقاً.
+    /// (اختبار فقط) يضع <c>EndDate</c> لآخر تفعيل في الماضي فيدخل النظام وضع "قراءة فقط".
+    /// يُعيد توقيع السلسلة كاملةً ليبقى التحقّق متّسقاً.
+    /// <para>
+    /// <paramref name="expireType"/>:
+    /// <list type="bullet">
+    ///   <item><c>"natural"</c> — انتهى منذ يوم واحد (افتراضي)</item>
+    ///   <item><c>"canceled"</c> — إلغاء إداري — منذ 30 يوماً</item>
+    ///   <item><c>"warning"</c> — شارف على الانتهاء (+ 3 أيام من الآن)</item>
+    /// </list>
+    /// </para>
     /// </summary>
-    Task<Result> TestExpireAsync(string? userId, CancellationToken ct);
+    Task<Result> TestExpireAsync(string? userId, string? expireType, CancellationToken ct);
 
     /// <summary>
     /// (اختبار فقط) يضع <c>EndDate</c> لآخر تفعيل بعد <paramref name="days"/> يوم
@@ -356,8 +364,15 @@ VALUES (@c, @ck, @d, @s, @e, SYSUTCDATETIME(), @u, @src);";
         return code;
     }
 
-    public Task<Result> TestExpireAsync(string? userId, CancellationToken ct)
-        => SetLastEndDateAsync(DateTime.UtcNow.AddDays(-1), userId, "TEST_EXPIRE", ct);
+    public Task<Result> TestExpireAsync(string? userId, string? expireType, CancellationToken ct)
+    {
+        return expireType?.ToLowerInvariant() switch
+        {
+            "canceled" => SetLastEndDateAsync(DateTime.UtcNow.AddDays(-30), userId, "TEST_CANCEL",  ct),
+            "warning"  => SetLastEndDateAsync(DateTime.UtcNow.AddDays(+3),  userId, "TEST_WARNING", ct),
+            _          => SetLastEndDateAsync(DateTime.UtcNow.AddDays(-1),   userId, "TEST_EXPIRE",  ct),
+        };
+    }
 
     public Task<Result> TestRestoreAsync(int days, string? userId, CancellationToken ct)
     {

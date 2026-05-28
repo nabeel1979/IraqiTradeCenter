@@ -158,6 +158,7 @@ public static class AuthSeeder
             PermissionRegistry.Accounting.AccountStatement.Print,
             PermissionRegistry.Accounting.AccountStatement.Export,
             PermissionRegistry.Accounting.CashBoxes.Read,
+            PermissionRegistry.Accounting.CashBoxes.ViewAll,
             PermissionRegistry.Accounting.FiscalYears.Read,
             PermissionRegistry.Accounting.CurrencyRates.Read,
             PermissionRegistry.Accounting.VoucherTypes.Read,

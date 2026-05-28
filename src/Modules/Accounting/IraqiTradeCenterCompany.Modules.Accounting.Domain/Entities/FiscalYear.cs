@@ -7,6 +7,11 @@ namespace IraqiTradeCenterCompany.Modules.Accounting.Domain.Entities;
 public class FiscalYear : BaseEntity
 {
     public string Name { get; private set; } = default!;
+    /// <summary>
+    /// الاسم الإنجليزي الاختياري للسنة المالية — يُعرض في واجهة اللغة الإنجليزية،
+    /// وإلا يُستخدم الاسم العربي كـ fallback.
+    /// </summary>
+    public string? NameEn { get; private set; }
     public DateTime StartDate { get; private set; }
     public DateTime EndDate { get; private set; }
     public bool IsClosed { get; private set; }
@@ -21,22 +26,29 @@ public class FiscalYear : BaseEntity
 
     private FiscalYear() { }
 
-    public static FiscalYear Create(string name, DateTime startDate, DateTime endDate)
+    public static FiscalYear Create(string name, DateTime startDate, DateTime endDate, string? nameEn = null)
     {
         if (endDate <= startDate) throw new DomainException("تاريخ النهاية يجب أن يكون بعد البداية");
-        var fy = new FiscalYear { Name = name, StartDate = startDate, EndDate = endDate };
+        var fy = new FiscalYear
+        {
+            Name = name.Trim(),
+            NameEn = string.IsNullOrWhiteSpace(nameEn) ? null : nameEn.Trim(),
+            StartDate = startDate,
+            EndDate = endDate,
+        };
         BuildPeriods(fy);
         return fy;
     }
 
     /// <summary>تحديث الاسم والتواريخ. لا يُسمح به للسنة المغلقة.</summary>
-    public void Update(string name, DateTime startDate, DateTime endDate)
+    public void Update(string name, DateTime startDate, DateTime endDate, string? nameEn = null)
     {
         if (IsClosed) throw new DomainException("لا يمكن تعديل سنة مالية مغلقة");
         if (string.IsNullOrWhiteSpace(name)) throw new DomainException("اسم السنة المالية مطلوب");
         if (endDate <= startDate) throw new DomainException("تاريخ النهاية يجب أن يكون بعد البداية");
 
         Name = name.Trim();
+        NameEn = string.IsNullOrWhiteSpace(nameEn) ? null : nameEn.Trim();
         StartDate = startDate;
         EndDate = endDate;
     }

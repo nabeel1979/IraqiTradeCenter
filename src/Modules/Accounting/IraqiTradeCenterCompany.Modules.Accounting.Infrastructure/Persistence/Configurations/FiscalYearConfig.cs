@@ -11,6 +11,7 @@ public class FiscalYearConfig : IEntityTypeConfiguration<FiscalYear>
         b.ToTable("FiscalYears");
         b.HasKey(x => x.Id);
         b.Property(x => x.Name).HasMaxLength(50).IsRequired();
+        b.Property(x => x.NameEn).HasMaxLength(100);
         b.HasIndex(x => x.Name).IsUnique();
         b.HasMany(x => x.Periods).WithOne().HasForeignKey(p => p.FiscalYearId).OnDelete(DeleteBehavior.Cascade);
         b.HasQueryFilter(x => !x.IsDeleted);

@@ -172,7 +172,8 @@ SELECT
     e.ReferenceId   AS ReferenceId,
     e.ReferenceNumber AS ReferenceNumber,
     vt.Code         AS VoucherTypeCode,
-    e.VoucherSequence AS VoucherSequence
+    e.VoucherSequence AS VoucherSequence,
+    e.ManualNumber  AS ManualNumber
 FROM acc.JournalEntryLines l
 INNER JOIN acc.JournalEntries e ON e.Id = l.JournalEntryId
 INNER JOIN acc.Accounts a       ON a.Id = l.AccountId
@@ -195,7 +196,7 @@ ORDER BY e.EntryDate, e.Id, l.Id;";
         var rawList = new List<(int LineId, int EntryId, DateTime EntryDate, string EntryNumber, string EntryDesc,
             string EntryCurrency, int AccountId, bool IsDebit, decimal Amount, string? LineDesc,
             int EntryTypeInt, int SourceInt, string? RefType, int? RefId, string? RefNumber,
-            string? VoucherTypeCode, int? VoucherSequence)>();
+            string? VoucherTypeCode, int? VoucherSequence, string? ManualNumber)>();
         await using (var cmd = conn.CreateCommand())
         {
             cmd.CommandText = inPeriodSql;
@@ -224,7 +225,8 @@ ORDER BY e.EntryDate, e.Id, l.Id;";
                     reader.IsDBNull(13) ? null : reader.GetInt32(13),
                     reader.IsDBNull(14) ? null : reader.GetString(14),
                     reader.IsDBNull(15) ? null : reader.GetString(15),
-                    reader.IsDBNull(16) ? null : reader.GetInt32(16)
+                    reader.IsDBNull(16) ? null : reader.GetInt32(16),
+                    reader.IsDBNull(17) ? null : reader.GetString(17)
                 ));
             }
         }
@@ -403,7 +405,8 @@ ORDER BY e.EntryDate, e.EntryNumber;";
             r.RefId,
             r.RefNumber,
             r.VoucherTypeCode,
-            r.VoucherSequence
+            r.VoucherSequence,
+            r.ManualNumber
         }).ToList();
 
         var accountIds = lines.Select(l => l.AccountId).Distinct().ToList();
@@ -463,6 +466,7 @@ ORDER BY e.EntryDate, e.EntryNumber;";
                 VoucherNumber = (l.VoucherSequence.HasValue && !string.IsNullOrWhiteSpace(l.VoucherTypeCode))
                     ? $"{l.VoucherTypeCode}-{l.VoucherSequence.Value}"
                     : null,
+                ManualNumber = l.ManualNumber,
             });
         }
 

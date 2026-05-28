@@ -61,6 +61,7 @@ public class CompanySettingsController : ControllerBase
         s.NameAr       = req.NameAr.Trim();
         s.NameEn       = req.NameEn?.Trim();
         s.Address      = req.Address?.Trim();
+        s.AddressEn    = req.AddressEn?.Trim();
         s.Phone        = req.Phone?.Trim();
         s.Email        = req.Email?.Trim();
         s.Website      = req.Website?.Trim();
@@ -82,6 +83,7 @@ public record UpdateCompanySettingsRequest(
     string NameAr,
     string? NameEn,
     string? Address,
+    string? AddressEn,
     string? Phone,
     string? Email,
     string? Website,

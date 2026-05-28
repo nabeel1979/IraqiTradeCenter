@@ -9,6 +9,8 @@ public class CompanySettings
     public string NameAr { get; set; } = string.Empty;
     public string? NameEn { get; set; }
     public string? Address { get; set; }
+    /// <summary>العنوان بالإنجليزية (اختياري) — يُعرض في واجهة الإنجليزية وفي الطباعة الإنجليزية.</summary>
+    public string? AddressEn { get; set; }
     public string? Phone { get; set; }
     public string? Email { get; set; }
     public string? Website { get; set; }

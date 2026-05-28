@@ -25,6 +25,7 @@ public class GetFiscalYearsHandler : IRequestHandler<GetFiscalYearsQuery, List<F
         {
             Id = y.Id,
             Name = y.Name,
+            NameEn = y.NameEn,
             StartDate = y.StartDate,
             EndDate = y.EndDate,
             IsClosed = y.IsClosed,
